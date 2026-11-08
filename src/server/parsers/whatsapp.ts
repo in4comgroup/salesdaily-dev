@@ -2,8 +2,8 @@ import "server-only"
 
 import { createHash } from "node:crypto"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
-import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
   assembleMarkdown,
   buildFrontmatter,
@@ -434,8 +434,9 @@ export type ParsedWhatsAppGroup = {
 export async function parseWhatsAppGroup(
   input: ParseWhatsAppGroupInput,
 ): Promise<ParsedWhatsAppGroup> {
+  const aiRoute = getAiRuntime().resolve({ task: "parseText" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.text.model,
+    model: aiRoute.model,
     output: Output.object({ schema: analysisSchema }),
     system: `You are a precise WhatsApp chat parsing assistant. Extract structured metadata from a multi-message group transcript. Never fabricate facts — only return what is present in the conversation.
 
@@ -483,6 +484,7 @@ For WhatsApp specifically: the 'author/sender' is each of the conversation parti
       authors: input.authors,
     },
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

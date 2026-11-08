@@ -1,8 +1,8 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { getNylasClient } from "@/lib/nylas"
-import { PARSER_CONFIG } from "@/lib/parser-config"
 import type { NylasCredentials } from "@/server/providers/handlers"
 import {
   buildCalendarContext,
@@ -371,8 +371,9 @@ export async function analyzeAndAssembleEmail(
 
   const nowIso = new Date().toISOString()
 
+  const aiRoute = getAiRuntime().resolve({ task: "parseText" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.text.model,
+    model: aiRoute.model,
     output: Output.object({ schema: analysisSchema }),
     system: SYSTEM_PROMPT,
     prompt: buildLlmPrompt({
@@ -434,6 +435,7 @@ export async function analyzeAndAssembleEmail(
   return {
     markdown,
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

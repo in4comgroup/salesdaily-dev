@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader, Wand2 } from "lucide-react"
 import { toast } from "sonner"
-import { DEFAULT_MODEL_KEY } from "@/lib/llm-models"
+import { useAiModels } from "@/hooks/use-ai-models"
 import type { RuleRow } from "@/app/api/rules/route"
 import type { GenerateDealsResult } from "@/app/api/deals/discover/route"
 
@@ -15,10 +15,9 @@ import type { GenerateDealsResult } from "@/app/api/deals/discover/route"
 //     periodCutoff("last_day"); see rolling24hCutoffIso below)
 //   • sources → all organization sources (sourceIds: null)
 //   • rule    → "Funnel Processing Rule" (resolved by name)
-//   • model   → the default gateway model (DEFAULT_MODEL_KEY)
+//   • model   → the task default from server configuration
 //   • already-analyzed items are skipped (the default)
 const MAGIC_RULE_NAME = "Funnel Processing Rule"
-const MAGIC_MODEL_KEY = DEFAULT_MODEL_KEY
 
 // Rolling 24h cutoff, mirroring discovery's periodCutoff("last_day"). The
 // deals API takes a from/to date-time (not a `period`), so we send this cutoff
@@ -34,6 +33,7 @@ export function MagicDealsButton({
   onDealsGenerated: () => void
 }) {
   const [running, setRunning] = useState(false)
+  const aiModels = useAiModels("deals")
 
   const handleClick = async () => {
     setRunning(true)
@@ -62,7 +62,6 @@ export function MagicDealsButton({
           to: null,
           sourceIds: null, // all organization sources
           ruleId: rule.id,
-          modelKey: MAGIC_MODEL_KEY,
           includeAlreadyAnalyzed: false,
         }),
       })
@@ -106,7 +105,7 @@ export function MagicDealsButton({
   }
 
   return (
-    <Button size="sm" onClick={handleClick} disabled={running}>
+    <Button size="sm" onClick={handleClick} disabled={running || !aiModels.enabled}>
       {running ? (
         <>
           <Loader className="h-4 w-4 mr-1 animate-spin" />

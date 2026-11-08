@@ -23,6 +23,8 @@ export const DEFAULT_RELEVANCE: MetadataRelevance = {
 // deliberately excluded — it lives only in the markdown body / R2
 // blob and would bloat the metadata column for no search benefit.
 export type MetadataAnalysis = {
+  // Actual upstream model used; absent for deterministic parsing.
+  parserModel?: string
   language: string
   summary: string
   mentions: string[]

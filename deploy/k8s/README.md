@@ -57,6 +57,15 @@ kubectl -n salesdaily create secret generic crm-env --from-env-file=<filled-file
 kubectl -n salesdaily rollout restart deploy/crm
 ```
 
+## 2b. AI routing configuration
+
+Stage 2 introduces mandatory `AI_CONFIG_PATH`, mounted from ConfigMap
+`crm-ai-config`. The source is `app/ai-config.json` (blocked by default).
+Choose and validate a profile before release; add Yandex credentials/model URI
+to the full `crm-env` file when using Yandex. Configuration-only changes need
+an application restart. Detailed steps (including safe checks and updates):
+[`docs/deploy/ai-configuration.md`](../../docs/deploy/ai-configuration.md).
+
 ## 3. App
 
 Re-deploying a new release: **the `deploy` GitHub Actions workflow**

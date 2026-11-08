@@ -1,5 +1,6 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -137,8 +138,9 @@ export async function parseAudioBytes(
 
   const modelMediaType = resolveModelMediaType(mediaType, fileName)
 
+  const aiRoute = getAiRuntime().resolve({ task: "parseAudio" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.audio.model,
+    model: aiRoute.model,
     output: Output.object({ schema: audioAnalysisSchema }),
     system: `You are a precise audio parsing assistant. Transcribe the provided recording faithfully, diarise it by speaker, and extract structured metadata. Keep speaker labels stable across segments. Do not invent content that is not present in the audio.
 
@@ -230,6 +232,7 @@ For audio specifically: the 'author/sender' is each of the SPEAKERS — don't in
       speakerCount: speakers.length,
     },
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

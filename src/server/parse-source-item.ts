@@ -87,7 +87,6 @@ import type {
   NylasCredentials,
 } from "@/server/providers/handlers"
 
-const PARSER_MODEL = "google/gemini-2.5-flash"
 
 // ── Re-parse ──────────────────────────────────────────────────────────
 
@@ -1289,7 +1288,7 @@ async function markParsed(
     .set({
       parseStatus: "complete",
       parsedAt: new Date(),
-      parserModel: PARSER_MODEL,
+      parserModel: analysis.parserModel ?? null,
       parsedMarkdown: markdown,
       parseError: null,
       orgAttribution: attribution.value,
@@ -1329,7 +1328,7 @@ async function insertParsedChild(args: {
       fetchedAt: now,
       parseStatus: "complete",
       parsedAt: now,
-      parserModel: PARSER_MODEL,
+      parserModel: args.analysis.parserModel ?? null,
       parsedMarkdown: args.markdown,
       // Children inherit the parent's authorship verdict (set on ctx during the
       // parent's markParsed, which always runs before children are inserted).
@@ -1341,7 +1340,7 @@ async function insertParsedChild(args: {
       set: {
         parseStatus: "complete",
         parsedAt: now,
-        parserModel: PARSER_MODEL,
+        parserModel: args.analysis.parserModel ?? null,
         parsedMarkdown: args.markdown,
         parseError: null,
         filename: args.meta.fileName,

@@ -21,3 +21,11 @@ images:
     # setting this to the tag that is running now — see docs/deploy/ci-deploy.md.
     newTag: dev-sha-a4aca00
 
+
+# Non-secret AI routing configuration. Update the source file before deploy.
+configMapGenerator:
+  - name: crm-ai-config
+    files:
+      - ai-config.json
+    options:
+      disableNameSuffixHash: true

@@ -19,7 +19,7 @@ import {
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
 import { getMarkdown } from "@/lib/storage"
-import { getGatewayId } from "@/lib/llm-models"
+import { getAiRuntime } from "@/server/ai"
 import { loadOwnOrgIdentity, type OwnOrgIdentity } from "@/server/org-identity"
 import { extractEmailDomain } from "@/lib/email-domain"
 import { generateText, Output } from "ai"
@@ -220,7 +220,7 @@ export type GenerateCardsInput = {
   to: string | null
   sourceIds: string[] | null
   ruleId: string
-  modelKey: string
+  modelKey?: string
   // When false (default), the pipeline only sees items the previous run
   // hasn't analyzed yet (or has been re-parsed since). When true, it
   // ignores `cardAnalysisScannedAt` entirely — for ad-hoc re-runs.
@@ -517,7 +517,7 @@ export async function generateCards(
     return { historyMarkdown: lines.join("\n"), priorCount: kept.length }
   }
 
-  const gatewayId = getGatewayId(input.modelKey)
+  const aiRoute = getAiRuntime().resolve({ task: "cards", modelId: input.modelKey })
 
   const result: GenerateCardsResult = {
     scanned: 0,
@@ -584,7 +584,7 @@ export async function generateCards(
 
     try {
       const { output } = await generateText({
-        model: gatewayId,
+        model: aiRoute.model,
         output: Output.object({ schema: cardOutputSchema }),
         system:
           "You are a precise sales-and-marketing analysis assistant. " +

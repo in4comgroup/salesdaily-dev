@@ -1,3 +1,5 @@
+// Deprecated legacy reference; application routing and UI now use AI_CONFIG_PATH.
+// Kept for historical compatibility; do not use string model IDs in SDK calls.
 // Shared LLM-model dictionary for client-side pickers + server-side gateway
 // routing. The AI chat header, the Explore-sources dialog, and any future
 // model-pick UI should import MODELS from here rather than duplicating the

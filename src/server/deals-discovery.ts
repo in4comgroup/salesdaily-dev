@@ -26,7 +26,7 @@ import {
 } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
 import { getMarkdown } from "@/lib/storage"
-import { getGatewayId } from "@/lib/llm-models"
+import { getAiRuntime } from "@/server/ai"
 import { generateText, Output } from "ai"
 import { z } from "zod"
 import { randomUUID } from "crypto"
@@ -82,7 +82,7 @@ export type GenerateDealsInput = {
   to: string | null
   sourceIds: string[] | null
   ruleId: string
-  modelKey: string
+  modelKey?: string
   // When false (default), the pipeline only sees items the previous run
   // hasn't analyzed yet (or has been re-parsed since). When true, it
   // ignores `dealAnalysisScannedAt` entirely.
@@ -452,7 +452,7 @@ export async function generateDeals(
     )
     .join("\n- ")
 
-  const gatewayId = getGatewayId(input.modelKey)
+  const aiRoute = getAiRuntime().resolve({ task: "deals", modelId: input.modelKey })
 
   const result: GenerateDealsResult = {
     scanned: 0,
@@ -522,7 +522,7 @@ export async function generateDeals(
 
       try {
         const { output } = await generateText({
-          model: gatewayId,
+          model: aiRoute.model,
           output: Output.object({ schema: dealOutputSchema }),
           system:
             "You are a precise sales-pipeline analysis assistant. " +

@@ -10,7 +10,7 @@ import {
   buildAnalyticsSystemPrompt,
   buildAnalyticsTools,
 } from "@/server/analytics-assistant"
-import { DEFAULT_MODEL_KEY, getGatewayId } from "@/lib/llm-models"
+import { getAiRuntime, assertChatContentAllowed } from "@/server/ai"
 
 export const maxDuration = 60
 
@@ -20,7 +20,6 @@ export const maxDuration = 60
 // The org id is bound into the tool from the SESSION — it is never a model
 // input, so no prompt injection can widen the scope to another tenant.
 
-const DEFAULT_MODEL = DEFAULT_MODEL_KEY
 
 export async function POST(req: Request) {
   try {
@@ -35,6 +34,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "No active organization" }, { status: 403 })
     }
 
+    const aiRoute = getAiRuntime().resolve({ task: "analytics" })
+    assertChatContentAllowed(messages, aiRoute.adapter)
+
     // Default window = the org's real data span, so «за период» means something
     // even when the dataset doesn't straddle today.
     const bounds = await computeAnalyticsBounds(organizationId)
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
       : new Date()
 
     const result = streamText({
-      model: getGatewayId(DEFAULT_MODEL),
+      model: aiRoute.model,
       system: buildAnalyticsSystemPrompt({
         from: bounds.first ?? "—",
         to: bounds.last ?? "—",

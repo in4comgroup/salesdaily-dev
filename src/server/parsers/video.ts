@@ -1,5 +1,6 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -151,8 +152,9 @@ export async function parseVideoBytes(
     throw new UnsupportedVideoTypeError(mediaType)
   }
 
+  const aiRoute = getAiRuntime().resolve({ task: "parseVideo" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.video.model,
+    model: aiRoute.model,
     output: Output.object({ schema: videoAnalysisSchema }),
     system: `You are a precise video parsing assistant. Analyse the provided video both visually and aurally. Produce a faithful visual description AND a faithful diarised transcript of any speech. Extract structured metadata. Never fabricate facts that are not present in the video.
 
@@ -248,6 +250,7 @@ For video specifically: the 'author/sender' is each of the SPEAKERS — don't in
   )
 
   const sharedFields = {
+    parserModel: aiRoute.upstreamModelId,
     language: analysis.language || "en",
     mentions: uniqueStrings(analysis.mentions),
     companies: uniqueStrings(analysis.companies),

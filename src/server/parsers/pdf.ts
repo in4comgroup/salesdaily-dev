@@ -1,5 +1,6 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -99,8 +100,9 @@ export async function parsePdfBytes(
     throw new PdfTooLargeError(bytes.byteLength, PARSER_CONFIG.pdf.maxBytes)
   }
 
+  const aiRoute = getAiRuntime().resolve({ task: "parsePdf" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.pdf.model,
+    model: aiRoute.model,
     output: Output.object({ schema: pdfAnalysisSchema }),
     system: `You are a precise document parsing assistant. Extract structured metadata and convert the provided PDF into clean Markdown. Do not invent facts. Aggressively strip repeating headers, footers, page numbers, and watermark boilerplate — they are noise, not content.
 
@@ -160,6 +162,7 @@ For PDFs specifically: the 'author/sender' is whoever you extract into the \`sen
       byteSize: bytes.byteLength,
     },
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

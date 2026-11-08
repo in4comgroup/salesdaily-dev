@@ -1,9 +1,9 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { getDriveClient } from "@/lib/google-drive"
 import type { GdriveCredentials } from "@/server/providers/handlers"
-import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
   assembleMarkdown,
   buildFrontmatter,
@@ -496,9 +496,10 @@ function inferImageMediaType(fileName: string): string {
 // ── Shared helpers ───────────────────────────────────────────────────
 
 function analysisFromMetadataOnly(
-  a: z.infer<typeof metadataOnlySchema>,
+  a: z.infer<typeof metadataOnlySchema> & { parserModel: string },
 ): MetadataAnalysis {
   return {
+    parserModel: a.parserModel,
     language: a.language || "en",
     summary: a.summary,
     mentions: uniqueStrings(a.mentions),
@@ -513,15 +514,16 @@ async function runMetadataExtraction(args: {
   context: string
   content: string
   systemHint: string
-}): Promise<z.infer<typeof metadataOnlySchema>> {
+}): Promise<z.infer<typeof metadataOnlySchema> & { parserModel: string }> {
   const MAX_CHARS = 120_000
   const clipped =
     args.content.length > MAX_CHARS
       ? `${args.content.slice(0, MAX_CHARS)}\n\n[...truncated, ${args.content.length - MAX_CHARS} additional characters omitted]`
       : args.content
 
+  const aiRoute = getAiRuntime().resolve({ task: "parseText" })
   const { output } = await generateText({
-    model: PARSER_CONFIG.text.model,
+    model: aiRoute.model,
     output: Output.object({ schema: metadataOnlySchema }),
     system: `${args.systemHint} Never fabricate facts that are not present in the provided content.
 
@@ -530,7 +532,7 @@ ${MENTIONED_PEOPLE_PROMPT}
 For Drive documents specifically: the 'author/sender' is the file owner (provided in the context); don't include them in mentionedPeople. Only emit third parties referenced in the document body. When inferring organization from the author's affiliation, only do so if the document itself states the author's company unambiguously.`,
     prompt: `${args.context}\n\n--- BEGIN CONTENT ---\n${clipped}\n--- END CONTENT ---`,
   })
-  return output
+  return { ...output, parserModel: aiRoute.upstreamModelId }
 }
 
 function buildStandardFrontmatter(

@@ -8,6 +8,10 @@
 
 Scoped notes for code under `src/app/`. High-level architecture lives in the root `CLAUDE.md`; lib/infra details live in `src/lib/CLAUDE.md`.
 
+## AI infrastructure configuration (stage 2)
+
+All AI calls use `src/server/ai/` and mandatory `AI_CONFIG_PATH`. Node.js startup validates the mounted JSON and active credentials. `/api/ai/config` publishes safe deployment model options; client pickers must use it, not the static legacy model dictionary. `config/ai/yandex.json` routes text tasks directly to Yandex; legacy providers remain explicit optional routes. External search, direct site reads and browser speech are policy-controlled. Media parsers also resolve routes so disabled tasks cannot silently call Gemini. The Yandex profile currently disables media and web enrichment; see `docs/ai/roadmap.md` for status and `docs/ai/stage-2-check.md` for validation. References below to fixed Gemini/Gateway describe the legacy implementation, not a default route.
+
 ## Organization Member Management
 
 - Org owners can: list members, update member roles, remove members, invite new members.

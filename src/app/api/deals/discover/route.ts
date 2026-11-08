@@ -56,12 +56,6 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
-    if (!body.modelKey) {
-      return NextResponse.json(
-        { error: "modelKey is required" },
-        { status: 400 },
-      )
-    }
     const result = await generateDeals({
       from: body.from ?? null,
       to: body.to ?? null,

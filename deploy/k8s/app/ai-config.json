@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "policy": {
+    "allowedConnections": [
+      "yandex"
+    ],
+    "features": {
+      "webSearch": false,
+      "websiteFetch": false,
+      "browserSpeechRecognition": false
+    }
+  },
+  "connections": {
+    "yandex": {
+      "enabled": true,
+      "adapter": "yandex-openai-compatible",
+      "baseUrl": "https://ai.api.cloud.yandex.net/v1",
+      "credentialsEnv": "YANDEX_AI_API_KEY",
+      "folderIdEnv": "YANDEX_AI_FOLDER_ID"
+    }
+  },
+  "models": {
+    "yandex-text": {
+      "enabled": true,
+      "label": "Yandex AI Studio",
+      "connectionId": "yandex",
+      "upstreamModelIdEnv": "YANDEX_AI_TEXT_MODEL_URI",
+      "capabilities": [
+        "text",
+        "structuredOutput",
+        "tools",
+        "streaming"
+      ]
+    }
+  },
+  "tasks": {
+    "chat": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "analytics": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "cards": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "deals": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "orderRequest": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "chatSummary": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "companyResearch": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "companyExtraction": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseText": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "parsePdf": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseImage": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseAudio": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseVideo": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseOffice": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "orgAttribution": {
+      "enabled": true,
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": [],
+      "defaultModel": "yandex-text"
+    },
+    "webSearch": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    }
+  }
+}

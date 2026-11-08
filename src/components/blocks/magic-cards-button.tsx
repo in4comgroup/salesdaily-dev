@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader, Wand2 } from "lucide-react"
 import { toast } from "sonner"
-import { DEFAULT_MODEL_KEY } from "@/lib/llm-models"
+import { useAiModels } from "@/hooks/use-ai-models"
 import type { RuleRow } from "@/app/api/rules/route"
 
 // One-click "Magic" — runs the exact same card-generation flow as
@@ -14,10 +14,9 @@ import type { RuleRow } from "@/app/api/rules/route"
 //     periodCutoff("last_day"); see rolling24hCutoffIso below)
 //   • sources → all organization sources (sourceIds: null)
 //   • rule    → "Cards pop-up rule — Telegram orders" (resolved by name)
-//   • model   → the default gateway model (DEFAULT_MODEL_KEY)
+//   • model   → the task default from server configuration
 //   • already-analyzed items are skipped (the default)
 const MAGIC_RULE_NAME = "Cards pop-up rule — Telegram orders"
-const MAGIC_MODEL_KEY = DEFAULT_MODEL_KEY
 
 // Russian plural picker: forms = [one, few, many] (1 / 2–4 / 0,5–20).
 function plural(n: number, forms: [string, string, string]): string {
@@ -42,6 +41,7 @@ export function MagicCardsButton({
   onCardsGenerated: () => void
 }) {
   const [running, setRunning] = useState(false)
+  const aiModels = useAiModels("cards")
 
   const handleClick = async () => {
     setRunning(true)
@@ -72,7 +72,6 @@ export function MagicCardsButton({
           to: null,
           sourceIds: null, // all organization sources
           ruleId: rule.id,
-          modelKey: MAGIC_MODEL_KEY,
           includeAlreadyAnalyzed: false,
         }),
       })
@@ -123,7 +122,8 @@ export function MagicCardsButton({
       size="sm"
       variant="outline"
       onClick={handleClick}
-      disabled={running}
+      title={aiModels.enabled ? undefined : "ИИ недоступен в текущей конфигурации"}
+      disabled={running || !aiModels.enabled}
     >
       {running ? (
         <>

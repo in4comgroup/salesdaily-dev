@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "policy": {
+    "allowedConnections": [
+      "vercel"
+    ],
+    "features": {
+      "webSearch": true,
+      "websiteFetch": true,
+      "browserSpeechRecognition": true
+    }
+  },
+  "connections": {
+    "vercel": {
+      "enabled": true,
+      "adapter": "vercel-gateway",
+      "baseUrl": "https://ai-gateway.vercel.sh/v3/ai",
+      "credentialsEnv": "AI_GATEWAY_API_KEY"
+    }
+  },
+  "models": {
+    "gemini-3.1-flash-lite": {
+      "enabled": true,
+      "label": "Gemini 3.1 Flash Lite",
+      "connectionId": "vercel",
+      "upstreamModelId": "google/gemini-3.1-flash-lite",
+      "capabilities": [
+        "text",
+        "structuredOutput",
+        "tools",
+        "streaming",
+        "googleSearch",
+        "image"
+      ]
+    },
+    "gpt-5-mini": {
+      "enabled": true,
+      "label": "GPT-5 Mini",
+      "connectionId": "vercel",
+      "upstreamModelId": "openai/gpt-5-mini",
+      "capabilities": [
+        "text",
+        "structuredOutput",
+        "tools",
+        "streaming",
+        "image"
+      ]
+    },
+    "claude-sonnet-4-6": {
+      "enabled": true,
+      "label": "Claude Sonnet 4.6",
+      "connectionId": "vercel",
+      "upstreamModelId": "anthropic/claude-sonnet-4-6",
+      "capabilities": [
+        "text",
+        "structuredOutput",
+        "tools",
+        "streaming",
+        "image"
+      ]
+    },
+    "gemini-2.5-flash": {
+      "enabled": true,
+      "label": "Gemini 2.5 Flash (parsers)",
+      "connectionId": "vercel",
+      "upstreamModelId": "google/gemini-2.5-flash",
+      "capabilities": [
+        "text",
+        "structuredOutput",
+        "tools",
+        "streaming",
+        "image",
+        "pdf",
+        "audio",
+        "video",
+        "googleSearch"
+      ]
+    }
+  },
+  "tasks": {
+    "chat": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite",
+        "gpt-5-mini",
+        "claude-sonnet-4-6"
+      ],
+      "fallbackModels": []
+    },
+    "analytics": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite"
+      ],
+      "fallbackModels": []
+    },
+    "cards": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite",
+        "gpt-5-mini",
+        "claude-sonnet-4-6"
+      ],
+      "fallbackModels": []
+    },
+    "deals": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite",
+        "gpt-5-mini",
+        "claude-sonnet-4-6"
+      ],
+      "fallbackModels": []
+    },
+    "orderRequest": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite",
+        "gpt-5-mini",
+        "claude-sonnet-4-6"
+      ],
+      "fallbackModels": []
+    },
+    "chatSummary": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite"
+      ],
+      "fallbackModels": []
+    },
+    "companyResearch": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite"
+      ],
+      "fallbackModels": []
+    },
+    "companyExtraction": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite"
+      ],
+      "fallbackModels": []
+    },
+    "parseText": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "parsePdf": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "parseImage": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "parseAudio": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "parseVideo": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "parseOffice": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "orgAttribution": {
+      "enabled": true,
+      "defaultModel": "gemini-2.5-flash",
+      "allowedModels": [
+        "gemini-2.5-flash"
+      ],
+      "fallbackModels": []
+    },
+    "webSearch": {
+      "enabled": true,
+      "defaultModel": "gemini-3.1-flash-lite",
+      "allowedModels": [
+        "gemini-3.1-flash-lite"
+      ],
+      "fallbackModels": []
+    }
+  }
+}

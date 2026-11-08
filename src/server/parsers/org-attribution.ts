@@ -10,8 +10,8 @@
 import "server-only"
 
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
-import { PARSER_CONFIG } from "@/lib/parser-config"
 import { getProvider } from "@/lib/sources/providers"
 import type { SourceProvider } from "@/db/schema"
 import type { OrgIdentity } from "@/server/org-identity"
@@ -175,8 +175,9 @@ async function judgeOrgAuthorship(
 ): Promise<OrgAttributionResult | null> {
   const content = markdown.slice(0, 8000)
   try {
+    const aiRoute = getAiRuntime().resolve({ task: "orgAttribution" })
     const { output } = await generateText({
-      model: PARSER_CONFIG.text.model,
+      model: aiRoute.model,
       output: Output.object({ schema: judgeSchema }),
       system: JUDGE_SYSTEM,
       prompt: [

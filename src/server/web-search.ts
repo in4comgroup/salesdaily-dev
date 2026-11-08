@@ -5,7 +5,7 @@ import "server-only"
 import { generateText, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 
-import { WEB_SEARCH_MODEL } from "@/lib/llm-models"
+import { getAiRuntime } from "@/server/ai"
 
 // ── Web search as an explicit tool, not a passthrough ────────────────
 //
@@ -66,7 +66,7 @@ export async function searchWeb(query: string): Promise<WebSearchResult> {
 
   try {
     const research = await generateText({
-      model: WEB_SEARCH_MODEL,
+      model: getAiRuntime().resolveGoogleSearch("webSearch"),
       system: RESEARCH_SYSTEM,
       prompt:
         `Research this on the web and report what you find: ${q}\n\n` +

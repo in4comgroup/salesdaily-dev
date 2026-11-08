@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "policy": {
+    "allowedConnections": [],
+    "features": {
+      "webSearch": false,
+      "websiteFetch": false,
+      "browserSpeechRecognition": false
+    }
+  },
+  "connections": {},
+  "models": {},
+  "tasks": {
+    "chat": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "analytics": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "cards": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "deals": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "orderRequest": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "chatSummary": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "companyResearch": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "companyExtraction": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseText": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parsePdf": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseImage": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseAudio": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseVideo": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "parseOffice": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "orgAttribution": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    },
+    "webSearch": {
+      "enabled": false,
+      "allowedModels": [],
+      "fallbackModels": []
+    }
+  }
+}

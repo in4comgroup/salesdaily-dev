@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select"
 import { Loader, Sparkles } from "lucide-react"
 import { toast } from "sonner"
-import { MODELS, DEFAULT_MODEL_KEY } from "@/lib/llm-models"
+import { useAiModels } from "@/hooks/use-ai-models"
 import type { SourceSummary } from "@/server/sources"
 import type { RuleRow } from "@/app/api/rules/route"
 import type {
@@ -86,7 +86,9 @@ export function DiscoverDealsDialog({
   const [rules, setRules] = useState<RuleRow[]>([])
   const [ruleId, setRuleId] = useState<string>("")
 
-  const [modelKey, setModelKey] = useState<string>(DEFAULT_MODEL_KEY)
+  const [selectedModel, setSelectedModel] = useState("")
+  const aiModels = useAiModels("deals", selectedModel)
+  const modelKey = aiModels.modelId ?? ""
   const [includeAlreadyAnalyzed, setIncludeAlreadyAnalyzed] = useState(false)
   // Dry run: preview what the rule WOULD do, writing nothing. The rule-testing
   // loop — iterate wording, re-run, no duplicates created, no items stamped.
@@ -394,6 +396,7 @@ export function DiscoverDealsDialog({
           </section>
 
           <section className="space-y-2">
+            {!aiModels.loading && !aiModels.enabled && <p className="text-sm text-muted-foreground">{aiModels.error ?? "ИИ отключён в текущей конфигурации"}</p>}
             <Label
               htmlFor="discover-deals-rule"
               className="text-xs uppercase tracking-wide text-muted-foreground"
@@ -439,13 +442,13 @@ export function DiscoverDealsDialog({
             >
               Модель
             </Label>
-            <Select value={modelKey} onValueChange={setModelKey}>
+            <Select value={modelKey} onValueChange={setSelectedModel} disabled={!aiModels.enabled}>
               <SelectTrigger id="discover-deals-model" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MODELS.map((m) => (
-                  <SelectItem key={m.key} value={m.key}>
+                {aiModels.models.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
                     {m.label}
                   </SelectItem>
                 ))}
@@ -625,6 +628,7 @@ export function DiscoverDealsDialog({
             disabled={
               running ||
               !ruleId ||
+              !aiModels.enabled ||
               previewCount === 0 ||
               (period === "specific" && (!specificFrom || !specificTo))
             }

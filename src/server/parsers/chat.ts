@@ -1,9 +1,9 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { getChatClient, listChatMembers } from "@/lib/google-chat"
 import type { GchatCredentials } from "@/server/providers/handlers"
-import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
   assembleMarkdown,
   buildFrontmatter,
@@ -124,8 +124,9 @@ export async function parseChatMessage(
     : null
   const nowIso = new Date().toISOString()
 
+  const aiRoute = getAiRuntime().resolve({ task: "parseText" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.text.model,
+    model: aiRoute.model,
     output: Output.object({ schema: analysisSchema }),
     system: `You are a precise Google Chat message parsing assistant. Extract structured metadata and convert the message into clean markdown. Never fabricate facts — only return what is present in the message.
 
@@ -187,6 +188,7 @@ For Chat specifically: the 'author/sender' is the message author shown above; do
     threadId: threadLastSegment,
     sourceCreatedAt,
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

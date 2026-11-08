@@ -21,7 +21,7 @@ import { listClients } from "@/server/clients"
 import { listContacts } from "@/server/contacts"
 import { listDeals } from "@/server/deals"
 import { searchWeb } from "@/server/web-search"
-import { DEFAULT_MODEL_KEY, getGatewayId } from "@/lib/llm-models"
+import { getAiRuntime, assertChatContentAllowed } from "@/server/ai"
 import {
   entitySearchScore,
   FIELD_WEIGHT,
@@ -30,10 +30,7 @@ import {
 
 export const maxDuration = 120
 
-// Model dictionary lives in src/lib/llm-models.ts so the chat picker, the
-// Explore-sources dialog, and this route share one source of truth.
-// All requests route through Vercel AI Gateway (auth via AI_GATEWAY_API_KEY).
-// Plain "provider/model" strings passed to streamText() are auto-routed by AI SDK v6.
+// Model choices and routes come from the deployment AI configuration.
 
 // Builds the source-search tool set. All three execute server-side and
 // are scoped to the caller's active organization — listing only that
@@ -295,13 +292,16 @@ export async function POST(req: Request) {
   try {
     const {
       messages,
-      model: modelKey = DEFAULT_MODEL_KEY,
+      model: modelKey,
     }: {
       messages: UIMessage[]
       model?: string
     } = await req.json()
 
-    const gatewayId = getGatewayId(modelKey)
+    const ai = getAiRuntime()
+    const aiRoute = ai.resolve({ task: "chat", modelId: modelKey })
+    const webEnabled = ai.isFeatureAllowed("webSearch") && ai.listModels("webSearch").length > 0
+    assertChatContentAllowed(messages, aiRoute.adapter)
 
     // ── One universal search engine ───────────────────────────────────
     //
@@ -314,23 +314,24 @@ export async function POST(req: Request) {
     //
     // Internal tools require an authenticated session AND an active
     // organization — items are tenant-scoped, so without an active org
-    // there's nothing to search. Anonymous or org-less callers get the
-    // web-only engine.
+    // there's nothing to search. Anonymous or org-less callers only get
+    // the externally permitted tools (which may be none).
     const session = await getServerSession()
     const sourceOrgId = session?.session.activeOrganizationId ?? null
     const sourceTools = buildSourceTools(sourceOrgId)
 
-    // Web search needs neither a session nor an org, and every provider can
-    // call it (it's an ordinary function tool), so it's always on.
+    // Web search needs neither a session nor an org, but is registered only
+    // when the deployment policy and its model route allow it.
     const tools = {
-      ...webTools,
+      ...(webEnabled ? webTools : {}),
       ...(sourceTools ?? {}),
     }
     const hasTools = Object.keys(tools).length > 0
 
     console.log(
-      "[chat] gateway:",
-      gatewayId,
+      "[chat] route:",
+      aiRoute.connectionId,
+      aiRoute.modelId,
       "org:",
       sourceOrgId ?? "-",
       "tools:",
@@ -338,10 +339,10 @@ export async function POST(req: Request) {
     )
 
     const result = streamText({
-      model: gatewayId,
+      model: aiRoute.model,
       system: buildSystemPrompt({
         internal: sourceTools !== undefined,
-        web: true,
+        web: webEnabled,
       }),
       messages: await convertToModelMessages(messages),
       ...(hasTools ? { tools } : {}),

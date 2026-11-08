@@ -1,5 +1,6 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -124,8 +125,9 @@ export async function parseImageBytes(
     throw new UnsupportedImageTypeError(mediaType)
   }
 
+  const aiRoute = getAiRuntime().resolve({ task: "parseImage" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.image.model,
+    model: aiRoute.model,
     output: Output.object({ schema: imageAnalysisSchema }),
     system: `You are a precise image parsing assistant. Extract structured metadata and convert the provided image into clean Markdown. For text-heavy images perform OCR faithfully; for photos/diagrams give a detailed description. Never fabricate facts that are not visible in the image.
 
@@ -187,6 +189,7 @@ For images specifically: the 'author/sender' is whoever you extract into the \`s
       byteSize: bytes.byteLength,
     },
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

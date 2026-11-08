@@ -1,7 +1,7 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
-import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
   assembleMarkdown,
   buildFrontmatter,
@@ -75,8 +75,9 @@ export type ParsedTelegramMessage = {
 export async function parseTelegramMessage(
   input: ParseTelegramMessageInput,
 ): Promise<ParsedTelegramMessage> {
+  const aiRoute = getAiRuntime().resolve({ task: "parseText" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.text.model,
+    model: aiRoute.model,
     output: Output.object({ schema: analysisSchema }),
     system: `You are a precise Telegram message parsing assistant. Extract structured metadata and convert the message into clean markdown. Never fabricate facts — only return what is present in the message.
 
@@ -116,6 +117,7 @@ For Telegram specifically: the 'author/sender' is the message sender shown above
   return {
     markdown,
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

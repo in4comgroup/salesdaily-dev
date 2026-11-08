@@ -16,7 +16,7 @@ import {
   listProductCategories,
   listProductFilterOptions,
 } from "@/server/products"
-import { getGatewayId, DEFAULT_MODEL_KEY } from "@/lib/llm-models"
+import { getAiRuntime } from "@/server/ai"
 import type { OrderRequestItemFilters } from "@/lib/order-request"
 import { generateText, Output } from "ai"
 import { z } from "zod"
@@ -320,9 +320,9 @@ export async function createAndParseOrderRequest(
       listProductFilterOptions(),
     ])
 
-    const gatewayId = getGatewayId(input.modelKey ?? DEFAULT_MODEL_KEY)
+    const aiRoute = getAiRuntime().resolve({ task: "orderRequest", modelId: input.modelKey })
     const { output } = await generateText({
-      model: gatewayId,
+      model: aiRoute.model,
       // Deterministic split: the same client message must yield the same
       // search terms every run. At the provider default temperature the model
       // drifts the term bag (adds/drops generic kind-words like "wine", varies

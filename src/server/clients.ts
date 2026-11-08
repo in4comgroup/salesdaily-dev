@@ -33,7 +33,7 @@ import { generateText, Output, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
 import { getServerSession } from "@/lib/get-session"
-import { DEFAULT_GATEWAY_ID } from "@/lib/llm-models"
+import { getAiRuntime } from "@/server/ai"
 import { randomUUID } from "crypto"
 import { request as httpsRequest } from "node:https"
 import { request as httpRequest } from "node:http"
@@ -537,8 +537,6 @@ export async function updateClient(
 // External web search + extraction. Gemini 3.1 Flash Lite runs
 // `google_search` grounding alongside function tools and is cheaper than
 // 2.5 Flash; see src/lib/llm-models.ts.
-const LOOKUP_RESEARCH_MODEL = DEFAULT_GATEWAY_ID
-const LOOKUP_EXTRACT_MODEL = DEFAULT_GATEWAY_ID
 
 // ── Direct homepage fetch (precision booster for the extract pass) ────
 //
@@ -744,6 +742,7 @@ function findAddressPageLinks(homeHtml: string, base: URL): string[] {
  * extract pass. Best-effort: returns "" if the homepage can't be fetched.
  */
 async function fetchSiteTextForLookup(knownUrl: string): Promise<string> {
+  getAiRuntime().assertFeatureAllowed("websiteFetch")
   const normalized = normalizeSiteUrl(knownUrl)
   if (!normalized) return ""
   let base: URL
@@ -908,6 +907,10 @@ export async function lookupClientOnWeb(
   const { activeOrgId } = await requireOrgContext()
   const target = await assertClientInOrg(clientId, activeOrgId)
 
+  const ai = getAiRuntime()
+  const researchModel = ai.resolveGoogleSearch("companyResearch")
+  const extractionModel = ai.resolve({ task: "companyExtraction" }).model
+
   // Pull active contacts for extra disambiguation context (their names +
   // emails — never the suspended ones, those are archived).
   const contacts = await db
@@ -1014,12 +1017,12 @@ Write 2–4 short paragraphs of research notes summarising what you found. If mu
   // When we know the company's own URL, fetch its actual page text in
   // parallel with the grounded research — grounding only sees snippets, so
   // this is what reliably surfaces footer / Impressum addresses.
-  const sitePromise = hasKnownUrl
+  const sitePromise = hasKnownUrl && ai.isFeatureAllowed("websiteFetch")
     ? fetchSiteTextForLookup(knownUrl)
     : Promise.resolve("")
 
   const research = await generateText({
-    model: LOOKUP_RESEARCH_MODEL,
+    model: researchModel,
     system:
       "You are a precise company-research assistant. Use the google_search tool to find authoritative information about the given company. Prefer official websites, LinkedIn company pages, and corporate registries over social media or aggregators. Never invent details — if a field can't be confirmed by the search results, say so explicitly.",
     prompt: researchPrompt,
@@ -1072,7 +1075,7 @@ ${research.text || "(no research output)"}
 Based on the research notes, extract up to 3 candidate companies that could be the right match for this CRM record. Sort by confidence (best first). For each candidate, fill every field that the research notes confirm, and use empty strings for fields the research didn't establish. Rate confidence by how well the candidate fits the operator-confirmed parameters and the record's address / contact email. Drop any candidate that contradicts an operator-confirmed parameter — do not return it as a lower-confidence alternative.`
 
   const { output: extracted } = await generateText({
-    model: LOOKUP_EXTRACT_MODEL,
+    model: extractionModel,
     output: Output.object({ schema: lookupExtractSchema }),
     system:
       "You convert research notes and raw company-website text into structured candidate records. Never invent fields — if neither the research notes nor the website text confirms a value, return an empty string for that field. When raw website text is provided it is primary-source evidence and outranks the research notes. Operator-confirmed parameters outrank third-party sources. Use empty arrays for the candidates list if no plausible match was found.",

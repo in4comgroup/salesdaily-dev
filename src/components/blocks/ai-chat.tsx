@@ -81,7 +81,6 @@ import {
   ModelSelectorList,
   ModelSelectorGroup,
   ModelSelectorItem,
-  ModelSelectorLogo,
   ModelSelectorName,
 } from "@/components/ai-elements/model-selector"
 import { SaveChatDialog } from "@/components/blocks/save-chat-dialog"
@@ -96,14 +95,13 @@ import { cn } from "@/lib/utils"
 import Image from "next/image"
 import { BrandMark } from "./brand-mark"
 import { SearchResultsCard } from "@/components/blocks/search-results-card"
-import { DEFAULT_MODEL_KEY, MODELS } from "@/lib/llm-models"
+import { useAiModels } from "@/hooks/use-ai-models"
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-// Model list lives in src/lib/llm-models.ts so the chat picker, the
-// Explore-sources dialog, and the /api/chat route share one source of truth.
+// Model list comes from the server deployment configuration.
 
 const ACCEPTED_FILE_TYPES = [
   "image/png",
@@ -147,22 +145,20 @@ function validateFiles(files: FileUIPart[]): FileUIPart[] {
 // ---------------------------------------------------------------------------
 
 export function AIChat({ className }: { className?: string }) {
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_KEY)
+  const [selectedModel, setSelectedModel] = useState("")
+  const ai = useAiModels("chat", selectedModel)
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
 
-  // ONE universal search engine — no toggles. The route registers the
-  // internal-records tools plus (on a capable model) Google's web-search
-  // grounding on every request, and the model decides which to use. The old
-  // «источники» / «веб-поиск» buttons existed only because Gemini 2.5 Flash
-  // dropped custom function tools whenever google_search was present.
-  const currentModel = MODELS.find((m) => m.key === selectedModel) ?? MODELS[0]
+  // Model selection and optional features come from deployment policy.
+  const currentModel = ai.currentModel
+  const attachmentsEnabled = Boolean(currentModel?.capabilities.includes("image"))
 
   // Stable transport that reads the latest model at request time via a ref —
   // avoids recreating the transport on every state change.
-  const bodyRef = useRef({ model: selectedModel })
+  const bodyRef = useRef({ model: ai.modelId })
   useEffect(() => {
-    bodyRef.current = { model: selectedModel }
-  }, [selectedModel])
+    bodyRef.current = { model: ai.modelId }
+  }, [ai.modelId])
 
   // Ref is read inside the body() closure at request build time, not during render.
   /* eslint-disable react-hooks/refs */
@@ -187,13 +183,21 @@ export function AIChat({ className }: { className?: string }) {
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
+      if (!ai.enabled) {
+        toast.error(ai.error ?? "ИИ отключён или ещё загружается")
+        return
+      }
+      if (!attachmentsEnabled && message.files.length) {
+        toast.error("Эта модель пока поддерживает только текст. Вставьте текст в сообщение.")
+        return
+      }
       const validFiles = validateFiles(message.files)
       await sendMessage({
         text: message.text,
         files: validFiles,
       })
     },
-    [sendMessage],
+    [sendMessage, ai.enabled, ai.error, attachmentsEnabled],
   )
 
   const handleSpeechTranscription = useCallback(
@@ -225,31 +229,23 @@ export function AIChat({ className }: { className?: string }) {
             onOpenChange={setModelSelectorOpen}
           >
             <ModelSelectorTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2 text-xs">
-                <ModelSelectorLogo
-                  provider={currentModel.provider}
-                  className="size-4"
-                />
-                {currentModel.label}
+              <Button variant="ghost" size="sm" className="gap-2 text-xs" disabled={!ai.enabled}>
+                {currentModel?.label ?? (ai.loading ? "Загрузка моделей…" : "ИИ недоступен")}
               </Button>
             </ModelSelectorTrigger>
             <ModelSelectorContent>
               <ModelSelectorInput placeholder="Поиск моделей..." />
               <ModelSelectorList>
                 <ModelSelectorGroup heading="Доступные модели">
-                  {MODELS.map((model) => (
+                  {ai.models.map((model) => (
                     <ModelSelectorItem
-                      key={model.key}
-                      value={model.key}
+                      key={model.id}
+                      value={model.id}
                       onSelect={() => {
-                        setSelectedModel(model.key)
+                        setSelectedModel(model.id)
                         setModelSelectorOpen(false)
                       }}
                     >
-                      <ModelSelectorLogo
-                        provider={model.provider}
-                        className="size-4"
-                      />
                       <ModelSelectorName>{model.label}</ModelSelectorName>
                     </ModelSelectorItem>
                   ))}
@@ -337,20 +333,20 @@ export function AIChat({ className }: { className?: string }) {
             maxFileSize={MAX_FILE_SIZE}
             onError={(err) => toast.error(err.message)}
           >
-            <PromptInputTextarea placeholder="Введите сообщение..." />
+            <PromptInputTextarea placeholder={ai.enabled ? "Введите сообщение..." : (ai.error ?? "ИИ недоступен в текущей конфигурации")} disabled={!ai.enabled} />
             <PromptInputTools className="pr-3 flex flex-row gap-2">
-              <PromptInputActionMenu>
+              {attachmentsEnabled && <PromptInputActionMenu>
                 <PromptInputActionMenuTrigger />
                 <PromptInputActionMenuContent>
                   <PromptInputActionAddAttachments />
                 </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
-              <SpeechInput
+              </PromptInputActionMenu>}
+              {ai.features?.browserSpeechRecognition && <SpeechInput
                 size="icon-sm"
                 variant="ghost"
                 onTranscriptionChange={handleSpeechTranscription}
-              />
-              <PromptInputSubmit variant="ghost" status={status} onStop={stop} />
+              />}
+              <PromptInputSubmit variant="ghost" status={status} onStop={stop} disabled={!ai.enabled && !isLoading} />
             </PromptInputTools>
           </PromptInput>
         </PromptInputProvider>

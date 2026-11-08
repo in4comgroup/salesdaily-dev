@@ -1,5 +1,6 @@
 import "server-only"
 import { generateText, Output } from "ai"
+import { getAiRuntime } from "@/server/ai"
 import { z } from "zod"
 import mammoth from "mammoth"
 import JSZip from "jszip"
@@ -129,8 +130,9 @@ export async function parseOfficeBytes(
       : await extractPptxText(buffer)
 
   // ── Stage 2: Gemini for cleanup + metadata ────────────────────────
+  const aiRoute = getAiRuntime().resolve({ task: "parseOffice" })
   const { output: analysis } = await generateText({
-    model: PARSER_CONFIG.office.model,
+    model: aiRoute.model,
     output: Output.object({ schema: officeAnalysisSchema }),
     system: `You are a precise document parsing assistant. Convert the provided pre-extracted document content into clean Markdown and extract structured metadata. Never fabricate facts that are not present in the input. Preserve the document's structure faithfully.
 
@@ -175,6 +177,7 @@ For Office documents specifically: the 'author/sender' is whoever you extract in
       byteSize: bytes.byteLength,
     },
     analysis: {
+      parserModel: aiRoute.upstreamModelId,
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),
