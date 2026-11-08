@@ -17,31 +17,52 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { dealStageLabel } from "@/lib/deal-funnel"
-import type { DealFunnelStageOption } from "@/app/api/deals/route"
-import { KanbanCard } from "./card"
-import { SORT_LABEL, SORT_MODES, type BoardColumn, type SortMode } from "./store"
+import {
+  STAGE_COLOR,
+  STAGE_DEFAULT,
+  aggregateByCurrency,
+  aggregateByCurrencyCompact,
+  dealAmount,
+  pluralizeDeals,
+} from "@/lib/deal-board"
+import type { DealRow } from "@/app/api/deals/route"
+import type { DealIntel } from "@/server/deals-mock"
+import type { DealTaskInfo } from "@/hooks/use-board-intel"
+import { DealKanbanCard } from "@/components/blocks/deal-kanban-card"
+import {
+  SORT_LABEL,
+  SORT_MODES,
+  type BoardColumn,
+  type SortMode,
+} from "./store"
 
-// Left accent bar per seeded stage (custom org stages fall through to neutral).
-const STAGE_ACCENT: Record<string, string> = {
-  Qualification: "bg-slate-400",
-  Discovery: "bg-blue-400",
-  Pilot: "bg-amber-400",
-  Proposal: "bg-orange-400",
-  Negotiations: "bg-indigo-400",
-  Closed: "bg-emerald-400",
-  Rejected: "bg-red-400",
-}
-
+// Гибрид: хром fba70 (дропдаун сортировки + кнопка сворачивания) поверх нашей
+// статистики стадии (count / сумма / взвеш.) и наших DealKanbanCard.
+// Колонка — droppable `col:<id>` с data.stageId для card→column collision
+// в board.tsx. Ghost-предложений агента больше нет — агент применяет переводы
+// сам (см. /api/deals/proposals), карточка несёт бейдж «перевёл агент».
 export function Column({
   column,
-  stages,
-  onChanged,
+  lostCards,
+  showLost,
+  intelById,
+  tasksByDeal,
+  intelLoaded,
+  onOpen,
   onCollapse,
   onSortChange,
 }: {
   column: BoardColumn
-  stages: DealFunnelStageOption[]
-  onChanged: () => void
+  // Проигранные/отменённые сделки, закрытые именно с ЭТОГО этапа — см.
+  // lostByStage в deals-board.tsx (listRejectedDealOrigins для Rejected,
+  // funnelStageId напрямую для cancelled). Показаны под разделителем «Не
+  // состоялись» ТОЛЬКО когда showLost включён (чекбокс в фильтрах доски).
+  lostCards: DealRow[]
+  showLost: boolean
+  intelById: Record<string, DealIntel>
+  tasksByDeal: Record<string, DealTaskInfo[]>
+  intelLoaded: boolean
+  onOpen: (deal: DealRow) => void
   onCollapse: () => void
   onSortChange: (mode: SortMode) => void
 }) {
@@ -50,95 +71,176 @@ export function Column({
     id: `col:${stage.id}`,
     data: { type: "column" as const, stageId: stage.id },
   })
-
-  // No internal vertical scroll / max-height for now (per product decision):
-  // the column grows to fit all its cards and the page scrolls vertically.
-  // Virtualization was removed with the scroll viewport — reinstate later via
-  // a window-virtualizer if a column ever holds hundreds of cards.
+  const colorClass = STAGE_COLOR[stage.name] ?? STAGE_DEFAULT
 
   return (
-    <div className="flex w-[max(320px,calc((100%-1.5rem)/3))] shrink-0 flex-col rounded-lg border bg-muted/20">
-      <div className="flex items-center justify-between gap-1 border-b px-2 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`h-3.5 w-1 shrink-0 rounded-full ${STAGE_ACCENT[stage.name] ?? "bg-zinc-400"}`}
-          />
-          <span className="truncate text-sm font-semibold">
-            {dealStageLabel(stage.name)}
-          </span>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {cards.length}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center">
-          <DropdownMenu>
+    // Резиновая ширина: колонки делят ряд поровну — доска заполняет страницу
+    // на широких экранах и вписывается в ширину панели на небольших. Ниже
+    // 11rem не сжимаются — далее скролл. min-h-0: колонка растянута по высоте
+    // контейнера, скроллится только её зона карточек (заголовок фиксирован).
+    <div className="min-w-44 flex-1 min-h-0 flex flex-col gap-2">
+      {/* @container — слово «сделок» ниже скрывается по ширине ИМЕННО этой
+          шапки (не вьюпорта): при 8 колонках на 1440px и при 4 на широком
+          экране один и тот же вьюпорт даёт разную ширину колонки. */}
+      {/* mx-1 matches the cards zone below's internal px-1 (added for the
+          hover-shadow clip fix) so the header's edges line up with the
+          cards' edges instead of the header reading wider. */}
+      <div className={`@container shrink-0 rounded-lg border p-2.5 mx-1 ${colorClass}`}>
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2 text-sm font-medium">
+              <span className="truncate">{dealStageLabel(stage.name)}</span>
+              <span className="text-xs opacity-70 shrink-0">
+                {Math.round(stage.closureProbability * 100)}%
+              </span>
+            </div>
+            {/* Суммы сокращены (к/м, UX №1), точные значения — в тултипе.
+                Две строки (не одна truncate) — иначе на узких колонках
+                (1440px, 7+ колонок) взвешенная сумма обрезается первой.
+                Слово «сделок» само по себе расшифровывает цифру и склоняется
+                по числу; прячется ниже критической ширины — остаётся цифра. */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    aria-label="Сортировка"
-                  >
-                    <ArrowDownUp className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
+                <div className="text-xs opacity-80 mt-0.5 cursor-default">
+                  <div className="truncate">
+                    {cards.length}
+                    <span className="hidden @[190px]:inline">
+                      {" "}
+                      {pluralizeDeals(cards.length)}
+                    </span>{" "}
+                    ·{" "}
+                    {aggregateByCurrencyCompact(
+                      cards.map((d) => ({
+                        amount: dealAmount(d.value),
+                        currency: d.currency,
+                      })),
+                    )}
+                  </div>
+                  <div className="truncate">
+                    взвеш.{" "}
+                    {aggregateByCurrencyCompact(
+                      cards.map((d) => ({
+                        amount: dealAmount(d.value) * stage.closureProbability,
+                        currency: d.currency,
+                      })),
+                    )}
+                  </div>
+                </div>
               </TooltipTrigger>
-              <TooltipContent>Сортировка: {SORT_LABEL[mode]}</TooltipContent>
+              <TooltipContent className="space-y-0.5">
+                {/* Число в шапке (перед суммой) нигде не подписано — тут
+                    расшифровка, что это количество сделок. */}
+                <div>Сделок: {cards.length}</div>
+                <div>
+                  Сумма:{" "}
+                  {aggregateByCurrency(
+                    cards.map((d) => ({
+                      amount: dealAmount(d.value),
+                      currency: d.currency,
+                    })),
+                  )}
+                </div>
+                <div>
+                  Взвешенно:{" "}
+                  {aggregateByCurrency(
+                    cards.map((d) => ({
+                      amount: dealAmount(d.value) * stage.closureProbability,
+                      currency: d.currency,
+                    })),
+                  )}
+                </div>
+              </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Сортировка</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={mode}
-                onValueChange={(v) => onSortChange(v as SortMode)}
-              >
-                {SORT_MODES.map((m) => (
-                  <DropdownMenuRadioItem key={m} value={m}>
-                    {SORT_LABEL[m]}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={onCollapse}
-                aria-label={`Свернуть «${dealStageLabel(stage.name)}»`}
-              >
-                <PanelLeftClose className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Свернуть колонку</TooltipContent>
-          </Tooltip>
+          </div>
+          <div className="flex shrink-0 items-center">
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      aria-label="Сортировка"
+                    >
+                      <ArrowDownUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Сортировка: {SORT_LABEL[mode]}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Сортировка</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={mode}
+                  onValueChange={(v) => onSortChange(v as SortMode)}
+                >
+                  {SORT_MODES.map((m) => (
+                    <DropdownMenuRadioItem key={m} value={m}>
+                      {SORT_LABEL[m]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={onCollapse}
+                  aria-label={`Свернуть «${dealStageLabel(stage.name)}»`}
+                >
+                  <PanelLeftClose className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Свернуть колонку</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </div>
-
       <div
         ref={setNodeRef}
-        className={`flex-1 px-2 py-2 transition-colors ${
-          isOver ? "bg-primary/5" : ""
+        // px-1: setting only overflow-y clips overflow-x too (a CSS overflow
+        // spec quirk — "visible" on one axis while the other isn't visible
+        // computes to "auto"), so a card's hover shadow got a hard-clipped
+        // edge right at the column's own bounds. The padding gives the
+        // shadow's blur room to fade out before it hits that clip line.
+        className={`flex flex-col gap-2 min-h-24 flex-1 overflow-y-auto scrollbar-none rounded-lg px-1 transition-colors ${
+          isOver ? "outline outline-2 outline-dashed outline-primary" : ""
         }`}
       >
-        {cards.length === 0 ? (
-          <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed text-center text-xs text-muted-foreground">
-            Перетащите сюда сделку
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {cards.map((card) => (
-              <KanbanCard
-                key={card.id}
-                deal={card}
-                stages={stages}
-                onChanged={onChanged}
+        {cards.map((d) => (
+          <DealKanbanCard
+            key={d.id}
+            deal={d}
+            onOpen={onOpen}
+            tasks={tasksByDeal[d.id] ?? []}
+            intel={intelById[d.id]}
+            intelLoaded={intelLoaded}
+          />
+        ))}
+        {showLost && lostCards.length > 0 && (
+          <>
+            {/* Тот же разделитель, что в terminal-column.tsx — сделки,
+                закрытые/отменённые именно с этого этапа. */}
+            <div className="flex items-center gap-2 px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              Не состоялись
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            {lostCards.map((d) => (
+              <DealKanbanCard
+                key={d.id}
+                deal={d}
+                onOpen={onOpen}
+                tasks={tasksByDeal[d.id] ?? []}
+                intel={intelById[d.id]}
+                intelLoaded={intelLoaded}
               />
             ))}
-          </div>
+          </>
         )}
       </div>
     </div>

@@ -18,7 +18,7 @@ import {
 } from "@/db/schema"
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
-import { getMarkdownFromR2 } from "@/lib/r2"
+import { getMarkdown } from "@/lib/storage"
 import { getGatewayId } from "@/lib/llm-models"
 import { loadOwnOrgIdentity, type OwnOrgIdentity } from "@/server/org-identity"
 import { extractEmailDomain } from "@/lib/email-domain"
@@ -547,14 +547,14 @@ export async function generateCards(
     result.scanned++
     let markdown = ""
     try {
-      markdown = await getMarkdownFromR2(item.markdownR2Key!)
+      markdown = await getMarkdown(item.markdownR2Key!)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      console.warn(`[generate-cards] ${item.id} · R2 read failed: ${msg}`)
+      console.warn(`[generate-cards] ${item.id} · Storage read failed: ${msg}`)
       result.skippedNoMarkdown++
       result.errors.push({
         sourceItemId: item.id,
-        message: `R2 read failed: ${msg}`,
+        message: `Storage read failed: ${msg}`,
       })
       return
     }

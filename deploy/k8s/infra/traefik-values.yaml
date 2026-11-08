@@ -1,0 +1,113 @@
+# Traefik ingress controller (Helm chart traefik/traefik).
+#
+#   helm upgrade --install traefik traefik/traefik --version 41.7.1 \
+#     -n traefik --create-namespace -f deploy/k8s/infra/traefik-values.yaml
+#
+# ⛔ PUBLIC IP 45.93.22.251 LIVES EXACTLY AS LONG AS THE SERVICE traefik/traefik.
+#    (h3llo: the IP is bound to the Service, not reserved for the project.)
+#    Deleting the Service — `kubectl delete svc`, `helm uninstall`, deleting
+#    the `traefik` namespace — releases the IP; a new Service gets a DIFFERENT
+#    one and every DNS record (dev.salesdaily.ru) breaks.
+#    → Change Traefik ONLY via `helm upgrade`. Never uninstall/reinstall.
+#    `helm.sh/resource-policy: keep` below keeps the Service on
+#    `helm uninstall`, but does NOT protect against deleting the namespace.
+#
+# The cluster (h3llo, KubeVirt) has no node external IPs; the public address
+# comes from a Service of type LoadBalancer provisioned by
+# kubevirt-cloud-controller-manager. Point the DNS A-record at that
+# EXTERNAL-IP:  kubectl get svc -n traefik traefik
+#
+# TLS: Traefik's built-in ACME (resolver `letsencrypt`, HTTP-01), NOT
+# cert-manager — this cluster's hosted control plane cannot reach in-cluster
+# Services (no konnectivity), so cert-manager's admission webhook times out.
+# Ingresses opt in with
+#   traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+# Certificates live in /data/acme.json on a small PVC.
+#
+# The ACME store is a single file on a ReadWriteOnce volume, so Traefik runs
+# as ONE replica with the Recreate strategy (a rolling update would wait
+# forever for the volume). Upgrades cause a few seconds of downtime.
+
+deployment:
+  replicas: 1
+  # Traefik refuses an acme.json that isn't 0600, and a remount can widen
+  # the mode. Re-assert it on every start (chart's documented recipe; runs
+  # as the same non-root 65532 user as Traefik).
+  initContainers:
+    - name: volume-permissions
+      image: busybox:1.37.0
+      command: ["sh", "-c", "touch /data/acme.json && chmod -v 600 /data/acme.json"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+
+updateStrategy:
+  type: Recreate
+  rollingUpdate: null
+
+persistence:
+  enabled: true
+  size: 128Mi
+  path: /data
+  accessMode: ReadWriteOnce
+
+# The PVC mounts root-owned; let the non-root Traefik user (65532) write
+# acme.json. OnRootMismatch chowns only on first mount, so acme.json keeps
+# the 0600 mode Traefik insists on.
+podSecurityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+  runAsNonRoot: true
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: bfedotov@in4comgroup.com
+      storage: /data/acme.json
+      httpChallenge:
+        entryPoint: web
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+providers:
+  kubernetesIngress:
+    # Ingress objects report the LoadBalancer IP in their ADDRESS column.
+    publishedService:
+      enabled: true
+
+service:
+  type: LoadBalancer
+  annotations:
+    # Keep the Service (and with it the public IP) on `helm uninstall`.
+    helm.sh/resource-policy: keep
+
+# Traefik v3 cuts reading a request after 60s by default — too short for
+# multi-file drop-off / WhatsApp archive uploads on a slow link.
+ports:
+  web:
+    # HTTP → HTTPS. Traefik answers the ACME HTTP-01 challenge on :80 itself,
+    # ahead of this redirect, so renewals keep working.
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+    transport:
+      respondingTimeouts:
+        readTimeout: 300s
+  websecure:
+    transport:
+      respondingTimeouts:
+        readTimeout: 300s
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi

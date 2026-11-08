@@ -1,0 +1,60 @@
+# Daily sync → parse → upload pipeline. Replaces Vercel Cron.
+#
+# Calls the app over the in-cluster Service (no ingress, no proxy timeout).
+# The route runs the pipeline synchronously and returns 200 on success /
+# 500 on failure, so `curl --fail` makes the Job's status mirror the run.
+# Schedule must stay in sync with ORCHESTRATION_CONFIG.cron
+# (src/server/orchestration/config.ts).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: crm-daily-pipeline
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "Etc/UTC"          # same as Vercel Cron (UTC)
+  # OFF until cutover: while Vercel+Neon is still production, this cluster
+  # runs on a COPY of the DB with the same item ids → a run here would
+  # re-sync the same mailboxes and overwrite the same R2 keys. Flip to
+  # false (and disable the Vercel cron) on switch-over day.
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # No automatic retry: a retried run would start a second pipeline_run
+      # while per-item errors are already isolated inside the pipeline.
+      backoffLimit: 0
+      activeDeadlineSeconds: 3700
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.1
+              env:
+                - name: CRON_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: crm-env
+                      key: CRON_SECRET
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  curl -sS --fail-with-body --max-time 3600
+                  -H "Authorization: Bearer ${CRON_SECRET}"
+                  http://crm/api/cron/daily
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 32Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]

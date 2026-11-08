@@ -1,0 +1,94 @@
+# Identity for the GitHub Actions `deploy` workflow (.github/workflows/deploy.yml).
+#
+#   kubectl apply -f deploy/k8s/infra/github-deployer.yaml
+#
+# Setup + how the token reaches GitHub: docs/deploy/ci-deploy.md.
+#
+# Deliberately NOT cluster-admin: the token lives in GitHub, so it can only
+# touch what `kubectl apply -k deploy/k8s/app` manages — the app's
+# Deployment / Service / Ingress / CronJob in `salesdaily` — and read pods for
+# `rollout status`. No delete, no Secrets, nothing outside the namespace
+# (above all not Service traefik/traefik, which holds the public IP).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: github-deployer
+  namespace: salesdaily
+---
+# Long-lived token (Kubernetes ≥ 1.24 no longer creates one automatically).
+# Rotate by deleting this Secret and re-applying the file — the controller
+# mints a new token; then update KUBE_TOKEN in GitHub.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-deployer-token
+  namespace: salesdaily
+  annotations:
+    kubernetes.io/service-account.name: github-deployer
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-deployer
+  namespace: salesdaily
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # `kubectl rollout status` follows the Deployment's ReplicaSets and pods.
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-deployer
+  namespace: salesdaily
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: github-deployer
+subjects:
+  - kind: ServiceAccount
+    name: github-deployer
+    namespace: salesdaily
+---
+# `kubectl apply -k deploy/k8s/app` also applies the Namespace object
+# (app/namespace.yaml) — cluster-scoped, so it needs a ClusterRole. Limited
+# to this one namespace by name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: github-deployer-namespace
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["salesdaily"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: github-deployer-namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: github-deployer-namespace
+subjects:
+  - kind: ServiceAccount
+    name: github-deployer
+    namespace: salesdaily

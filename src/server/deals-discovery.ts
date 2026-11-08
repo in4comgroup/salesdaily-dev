@@ -25,7 +25,7 @@ import {
   sql,
 } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
-import { getMarkdownFromR2 } from "@/lib/r2"
+import { getMarkdown } from "@/lib/storage"
 import { getGatewayId } from "@/lib/llm-models"
 import { generateText, Output } from "ai"
 import { z } from "zod"
@@ -487,14 +487,14 @@ export async function generateDeals(
       result.scanned++
       let markdown = ""
       try {
-        markdown = await getMarkdownFromR2(item.markdownR2Key!)
+        markdown = await getMarkdown(item.markdownR2Key!)
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        console.warn(`[generate-deals] ${item.id} · R2 read failed: ${msg}`)
+        console.warn(`[generate-deals] ${item.id} · Storage read failed: ${msg}`)
         result.skippedNoMarkdown++
         result.errors.push({
           sourceItemId: item.id,
-          message: `R2 read failed: ${msg}`,
+          message: `Storage read failed: ${msg}`,
         })
         return
       }
@@ -704,6 +704,8 @@ export async function generateDeals(
             // `description` is deliberately left untouched.
             reasoning: output.reasoning.trim() || null,
             changes: output.changes.trim() || null,
+            // LLM-discovery — агентский перевод (бейдж «перевёл агент»).
+            lastMovedBy: "agent",
           })
           .where(eq(deal.id, matchedDealId))
 

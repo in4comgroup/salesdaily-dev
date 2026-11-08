@@ -155,7 +155,7 @@ export function R2BatchUploadControl({
     }
 
     if (ids.length === 0) {
-      toast.message("Нечего загружать — все строки в этой области уже в R2")
+      toast.message("Нечего загружать — все строки в этой области уже в хранилище")
       setRunning(false)
       return
     }
@@ -202,11 +202,11 @@ export function R2BatchUploadControl({
       )
     } else if (failures.length === 0) {
       toast.success(
-        `Загружено ${ids.length} ${plural(ids.length, ["элемент", "элемента", "элементов"])} в R2`,
+        `Загружено ${ids.length} ${plural(ids.length, ["элемент", "элемента", "элементов"])} в хранилище`,
       )
     } else {
       toast.success(
-        `Загружено ${ok} ${plural(ok, ["элемент", "элемента", "элементов"])} в R2`,
+        `Загружено ${ok} ${plural(ok, ["элемент", "элемента", "элементов"])} в хранилище`,
       )
       for (const f of failures.slice(0, FAILURE_TOAST_CAP)) {
         toast.error(`${f.id.slice(0, 8)}…: ${f.error}`)

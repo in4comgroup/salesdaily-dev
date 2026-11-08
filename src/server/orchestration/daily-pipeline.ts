@@ -15,9 +15,9 @@ import { listPendingUploadIds } from "./upload-pending"
 import { ORCHESTRATION_CONFIG } from "./config"
 
 // Engine-agnostic orchestration entry point. Called by:
-//   • The Vercel Workflow (cron-triggered) — wraps this in workflow steps.
+//   • `/api/cron/daily` — curled by the Kubernetes CronJob.
 //   • The admin "Run pipeline now" route (manual trigger).
-//   • Any future scheduler we swap Vercel for — same function.
+//   • Any future scheduler (BullMQ, Trigger.dev, …) — same function.
 //
 // Sequential execution by design (PHASE2 #2 user decision: MVP doesn't
 // have enough volume to need parallelism, and serial keeps Gemini cost

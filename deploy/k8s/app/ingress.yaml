@@ -1,0 +1,27 @@
+# Public entry via Traefik (deploy/k8s/infra/traefik-values.yaml).
+#
+# TLS: Traefik's built-in ACME resolver `letsencrypt` fetches the
+# certificate for the host below (HTTP-01; DNS must point at the Traefik
+# LoadBalancer IP). No cert-manager — see deploy/k8s/infra/traefik-values.yaml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crm
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - dev.salesdaily.ru
+  rules:
+    - host: dev.salesdaily.ru
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: crm
+                port:
+                  name: http

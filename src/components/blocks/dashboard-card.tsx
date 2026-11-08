@@ -1,6 +1,13 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +32,7 @@ import {
   Check,
   Contact,
   FileText,
+  Link2,
   ShoppingCart,
   Users,
   X,
@@ -59,17 +67,21 @@ const CATEGORY_LABEL: Record<CardCategory, string> = {
   support: "Поддержка",
 }
 
+// Хью взяты из палитры доски сделок («драгоценные тона», src/lib/deal-board.ts
+// STAGE_COLOR + бейджи deal-kanban-card.tsx), а не разрозненного набора Tailwind-
+// цветов — чтобы Домашняя читалась как часть того же продукта, что и Сделки.
 const CATEGORY_COLOR: Record<CardCategory, string> = {
   client_activity: "bg-blue-500/15 text-blue-600 dark:text-blue-300",
-  colleagues_activity: "bg-purple-500/15 text-purple-600 dark:text-purple-300",
+  colleagues_activity: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
   business_info: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
-  action_required: "bg-red-500/15 text-red-600 dark:text-red-300",
-  ambiguity: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
-  data_intelligence: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300",
+  action_required:
+    "bg-[#C1121F]/10 text-[#A31018] dark:bg-[#C1121F]/15 dark:text-[#FF8F96]",
+  ambiguity: "bg-[#C2410C]/15 text-[#C2410C] dark:text-[#E5824A]",
+  data_intelligence: "bg-[#294A6B]/15 text-[#294A6B] dark:text-[#8FB4D9]",
   momentum: "bg-teal-500/15 text-teal-600 dark:text-teal-300",
   log_only: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
-  new_order: "bg-lime-500/15 text-lime-700 dark:text-lime-300",
-  support: "bg-rose-500/15 text-rose-600 dark:text-rose-300",
+  new_order: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  support: "bg-[#669BBC]/20 text-[#2F5D77] dark:text-[#9FC4DC]",
 }
 
 const PRIORITY_COLOR: Record<CardPriority, string> = {
@@ -77,51 +89,117 @@ const PRIORITY_COLOR: Record<CardPriority, string> = {
   high: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
 }
 
-// Vertical gradient: silver for normal, gold for high. Fades into the
-// standard card surface so the card body remains readable.
-const PRIORITY_GRADIENT: Record<CardPriority, string> = {
-  normal:
-    "bg-linear-to-b from-slate-200 via-slate-100/60 to-card dark:from-slate-500/50 dark:via-slate-800/30 dark:to-card",
-  high: "bg-linear-to-b from-amber-100 via-amber-100/70 to-card dark:from-amber-600/40 dark:via-amber-900/30 dark:to-card",
-}
+// Same white bg-card surface as every other card grid in the app
+// (client-card.tsx/task-card.tsx/contact-card.tsx/deal-kanban-card.tsx) —
+// the page lost its outer white Card container, so a translucent tint would
+// show the atmospheric page background through it instead of reading white.
+// No -translate-y on hover (client-card.tsx dropped it: inside an
+// overflow-y-auto scroll container the lift clipped the top row against the
+// section's edge).
+const CARD_SURFACE =
+  "bg-card border-border shadow-sm transition-[box-shadow,background-color] duration-200 hover:shadow-lg hover:bg-card dark:hover:bg-secondary"
 
 // A message field (Analysis / Recommendation) shown clamped to 3 lines on
-// the card, with the FULL text revealed in a hover-card on hover, keyboard
-// focus, or click — so long messages are readable without opening the card
-// details page. The content is portaled, so it escapes the card's fixed
-// height + overflow-hidden.
-function MessageField({ label, text }: { label: string; text: string }) {
+// the card. The FULL text is only revealed via hover-card/click when it's
+// actually clipped by the clamp — a short message that already fits in 3
+// lines got the exact same hover popup showing the exact same text, which
+// just read as a pointless duplicate tooltip. Truncation is detected by
+// comparing the clamped element's scrollHeight (full content) against its
+// clientHeight (clamped box) — the standard line-clamp overflow check.
+function MessageField({
+  label,
+  text,
+  highlight = false,
+  action,
+  noClamp = false,
+}: {
+  label: string
+  text: string
+  // Рекомендация — единственное поле карточки, которое требует действия от
+  // оператора, поэтому визуально выделяется цветным блоком (в отличие от
+  // «Анализ», который просто контекст).
+  highlight?: boolean
+  // «Создать заказ» на new_order-карточках живёт прямо в блоке рекомендации
+  // (прижато вправо), а не отдельной кнопкой внизу карточки.
+  action?: ReactNode
+  // Рекомендация теперь показывается ПОЛНОСТЬЮ, без клэмпа на 3 строки и
+  // без hover-card — карточка и так скроллится по вертикали (см. CardContent
+  // выше), так что обрезать текст незачем.
+  noClamp?: boolean
+}) {
   const [open, setOpen] = useState(false)
+  const [truncated, setTruncated] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    if (noClamp) return
+    const el = ref.current
+    if (!el) return
+    const check = () => setTruncated(el.scrollHeight - el.clientHeight > 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [text, noClamp])
+
+  const paragraph = (
+    <p
+      ref={ref}
+      tabIndex={truncated ? 0 : undefined}
+      onClick={truncated ? () => setOpen((o) => !o) : undefined}
+      className={cn(
+        "leading-relaxed whitespace-pre-wrap rounded -mx-1 px-1 transition-colors outline-hidden",
+        !noClamp && "line-clamp-3",
+        truncated && "cursor-pointer hover:bg-muted/40 focus:bg-muted/40",
+      )}
+    >
+      {text}
+    </p>
+  )
+
   return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">
+    <div
+      className={cn(
+        highlight &&
+          "rounded-md border border-blue-500/25 bg-blue-500/10 p-2 dark:border-blue-400/25 dark:bg-blue-400/10",
+      )}
+    >
+      <div
+        className={cn(
+          "text-xs font-semibold uppercase tracking-wide mb-0.5",
+          highlight
+            ? "text-blue-700 dark:text-blue-300"
+            : "text-muted-foreground",
+        )}
+      >
         {label}
       </div>
-      <HoverCard
-        open={open}
-        onOpenChange={setOpen}
-        openDelay={150}
-        closeDelay={100}
-      >
-        <HoverCardTrigger asChild>
-          <p
-            tabIndex={0}
-            onClick={() => setOpen((o) => !o)}
-            className="leading-relaxed line-clamp-3 whitespace-pre-wrap cursor-pointer rounded -mx-1 px-1 transition-colors hover:bg-muted/40 focus:bg-muted/40 outline-hidden"
-          >
-            {text}
-          </p>
-        </HoverCardTrigger>
-        <HoverCardContent
-          align="start"
-          className="w-96 max-h-80 overflow-y-auto"
+      {truncated ? (
+        <HoverCard
+          open={open}
+          onOpenChange={setOpen}
+          openDelay={150}
+          closeDelay={100}
         >
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-            {label}
-          </div>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
-        </HoverCardContent>
-      </HoverCard>
+          <HoverCardTrigger asChild>{paragraph}</HoverCardTrigger>
+          <HoverCardContent
+            align="start"
+            className="w-96 max-h-80 overflow-y-auto"
+          >
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+              {label}
+            </div>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+              {text}
+            </p>
+          </HoverCardContent>
+        </HoverCard>
+      ) : (
+        paragraph
+      )}
+      {/* На следующей строке — ширину растягивает сам вызывающий компонент
+          через свой className, MessageField её не навязывает. */}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }
@@ -248,21 +326,16 @@ export function DashboardCard({
         // analysis (3 lines) + recommendation (3 lines) + refs + pinned
         // action row without forcing line-clamp across the card boundary,
         // while staying tight enough that short cards don't leave a big
-        // gap between the source ref and the action row.
-        "flex flex-col h-120 dark:border-gray-600 overflow-hidden",
-        PRIORITY_GRADIENT[card.priority],
+        // gap above the footer group.
+        "flex flex-col h-120 gap-4 overflow-hidden",
+        CARD_SURFACE,
       )}
     >
-      <CardHeader className="pb-3 space-y-2">
+      <CardHeader className="pb-1.5 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base min-w-0 flex-1 truncate">
             {CATEGORY_LABEL[card.category]}
           </CardTitle>
-          <Link href={`/cards/${card.id}`} className="shrink-0">
-            <Button variant="outline" size="sm">
-              Подробнее
-            </Button>
-          </Link>
         </div>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex flex-wrap gap-1.5 min-w-0">
@@ -302,15 +375,40 @@ export function DashboardCard({
       </CardHeader>
 
       <CardContent className="flex-1 min-h-0 flex flex-col gap-3 text-sm overflow-hidden">
-        <div className="space-y-2 min-h-0">
-          {analysis && <MessageField label="Анализ" text={analysis} />}
+        {/* Раньше overflow-hidden на всю CardContent молча ОБРЕЗАЛ
+            содержимое, если анализ+рекомендация+причина отклонения+теги не
+            влезали в фиксированную высоту карточки (h-120) — «Причина
+            отклонения» могла визуально наехать на блок рекомендации прямо
+            на границе обрезки. Теперь это отдельная скроллящаяся зона
+            (scrollbar-none — скроллбар спрятан, скролл работает) с
+            градиентом-подсказкой внизу, а не тихая обрезка. */}
+        <div className="relative flex-1 min-h-0">
+        <div className="h-full overflow-y-auto scrollbar-none space-y-3 pt-4 pb-4">
+          {analysis && <MessageField label="Анализ" text={analysis} noClamp />}
           {recommendation && (
-            <MessageField label="Рекомендация" text={recommendation} />
+            <MessageField
+              label="Рекомендация"
+              text={recommendation}
+              highlight
+              noClamp
+              action={
+                card.category === "new_order" ? (
+                  <Button asChild size="sm" variant="outline" className="w-full">
+                    {/* Hands the card off to /products, where the New Order
+                        dialog opens prefilled with the linked client + the
+                        verbatim client message (message.orderRequest). */}
+                    <Link href={`/products?orderFromCard=${card.id}`}>
+                      <ShoppingCart className="h-4 w-4 mr-1" />
+                      Создать заказ
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
           )}
           {!analysis && !recommendation && (
             <p className="text-muted-foreground italic">Нет содержимого.</p>
           )}
-        </div>
 
         {card.rejectionReason && (
           <div className="rounded-md border border-red-300/50 bg-red-500/5 p-2 text-xs">
@@ -326,70 +424,90 @@ export function DashboardCard({
         {(card.clients.length > 0 ||
           card.contacts.length > 0 ||
           card.users.length > 0 ||
+          card.ruleName ||
           card.sourceItemTitle) && (
-          <div className="space-y-1.5 text-xs text-muted-foreground pt-1 border-t border-border/40">
+          <div className="space-y-1.5 text-xs text-muted-foreground">
             {card.clients.length > 0 && (
-              <div className="flex items-start gap-2">
-                <Building2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <div className="flex flex-wrap gap-1">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  Компания
+                </div>
+                {/* Кликабельно — переход на карточку компании (звонок
+                    18.09: «у меня контакт, но нелекабельный»). asChild +
+                    Link, не onClick-навигация — обычная ссылка, средней
+                    кнопкой можно открыть в новой вкладке. pl-[22px] =
+                    ширина иконки (14px) + gap-2 (8px) над ней, чтобы чипы
+                    начинались вровень с текстом заголовка, а не с иконки. */}
+                <div className="flex flex-wrap gap-1 pl-[22px]">
                   {card.clients.map((c) => (
-                    <Badge key={c.id} variant="outline" className="font-normal">
-                      {c.name}
+                    <Badge key={c.id} variant="outline" className="font-normal" asChild>
+                      <Link href={`/clients?openClient=${c.id}`}>{c.name}</Link>
                     </Badge>
                   ))}
                 </div>
               </div>
             )}
             {card.contacts.length > 0 && (
-              <div className="flex items-start gap-2">
-                <Contact className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <div className="flex flex-wrap gap-1">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
+                  <Contact className="h-3.5 w-3.5 shrink-0" />
+                  Внешние контакты
+                </div>
+                {/* Кликабельно — есть карточка контакта, куда вести. */}
+                <div className="flex flex-wrap gap-1 pl-[22px]">
                   {card.contacts.map((c) => (
-                    <Badge key={c.id} variant="outline" className="font-normal">
-                      {c.name}
+                    <Badge key={c.id} variant="outline" className="font-normal" asChild>
+                      <Link href={`/contacts?openContact=${c.id}`}>{c.name}</Link>
                     </Badge>
                   ))}
                 </div>
               </div>
             )}
             {card.users.length > 0 && (
-              <div className="flex items-start gap-2">
-                <Users className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <div className="flex flex-wrap gap-1">
-                  {card.users.map((u) => (
-                    <Badge key={u.id} variant="outline" className="font-normal">
-                      {u.name}
-                    </Badge>
-                  ))}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
+                  <Users className="h-3.5 w-3.5 shrink-0" />
+                  Задействованные сотрудники
                 </div>
+                {/* Просто текстом, не чипами — некликабельно, в приложении
+                    нет страницы профиля сотрудника, чтобы вести туда. */}
+                <p className="pl-[22px]">{card.users.map((u) => u.name).join(", ")}</p>
+              </div>
+            )}
+            {card.ruleName && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
+                  <Link2 className="h-3.5 w-3.5 shrink-0" />
+                  Правило
+                </div>
+                <p className="pl-[22px] truncate">{card.ruleName}</p>
               </div>
             )}
             {card.sourceItemTitle && (
-              <div className="flex items-center gap-2 truncate">
-                <FileText className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Источник: {card.sourceItemTitle}</span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  Источник
+                </div>
+                <p className="pl-[22px] truncate">{card.sourceItemTitle}</p>
               </div>
             )}
           </div>
         )}
+        </div>
+        {/* Градиенты-подсказки «есть что проскроллить» — поверх верха и
+            низа скролл-зоны, не самой карточки, поэтому не перекрывают
+            заголовок выше и кнопки Принять/Отклонить ниже. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-card to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-card to-transparent" />
+        </div>
 
-        {(card.category === "new_order" || !resolved) && (
-          <div className="flex flex-col gap-2 pt-2 mt-auto">
-            {card.category === "new_order" && (
-              <Button
-                asChild
-                size="sm"
-                className="bg-lime-600 text-white hover:bg-lime-600/90"
-              >
-                {/* Hands the card off to /products, where the New Order dialog
-                    opens prefilled with the linked client + the verbatim
-                    client message (message.orderRequest). */}
-                <Link href={`/products?orderFromCard=${card.id}`}>
-                  <ShoppingCart className="h-4 w-4 mr-1" />
-                  Создать заказ
-                </Link>
-              </Button>
-            )}
+        {/* Единая нижняя группа (одна mt-auto на весь блок, а не на каждый
+            элемент по отдельности) — иначе несколько mt-auto-соседей делят
+            свободное место пополам и между ними появляется незапланированный
+            зазор вместо того, чтобы плотно прилипать к низу карточки. */}
+        <div className="mt-auto flex flex-col gap-2 pt-2">
             {!resolved && (
             <div className="flex gap-2">
             {/* "Принять" opens the New Task dialog prefilled from this card.
@@ -400,7 +518,19 @@ export function DashboardCard({
               initialValues={taskInitialValues}
               onSuccess={handleAccept}
               trigger={
-                <Button size="sm" className="flex-1" disabled={isPending}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  // Пастельный emerald — тот же тон и та же «мягкая» подложка
+                  // (не сплошная заливка), что у бейджа «Принята», который
+                  // сменяет эту кнопку после успешного принятия (визуальная
+                  // преемственность); нет отдельного «success»-токена в
+                  // палитре (--chart-1..5 — только синие + лосось, зелёного
+                  // там вообще нет), поэтому взят тот же паттерн, что уже
+                  // используется для этого состояния в остальном приложении.
+                  className="flex-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25"
+                  disabled={isPending}
+                >
                   <Check className="h-4 w-4 mr-1" />
                   Принять
                 </Button>
@@ -452,8 +582,8 @@ export function DashboardCard({
             </Dialog>
             </div>
             )}
-          </div>
-        )}
+
+        </div>
       </CardContent>
     </Card>
   )

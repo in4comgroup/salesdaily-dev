@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { listClients, createClient, updateClient } from "@/server/clients"
+import {
+  listClients,
+  listClientRevenue12mo,
+  listClientsFeed,
+  createClient,
+  updateClient,
+  type ClientFeedTab,
+} from "@/server/clients"
 import { getServerSession } from "@/lib/get-session"
 import {
   getClientDetail,
@@ -7,7 +14,13 @@ import {
   type ClientDetail,
 } from "@/server/client-content"
 
-export { type ClientRow, type ClientContactPreview } from "@/server/clients"
+export {
+  type ClientRow,
+  type ClientContactPreview,
+  type ClientRevenueSummary,
+  type ClientFeedTab,
+} from "@/server/clients"
+export type { ClientTaskSummary } from "@/server/tasks"
 export type { ClientDetail }
 
 function errorResponse(error: unknown) {
@@ -43,8 +56,38 @@ export async function GET(request: NextRequest) {
         throw e
       }
     }
-    const clients = await listClients()
-    return NextResponse.json({ clients })
+    // Новая лента «Компании» (5 табов, бесконечный скролл, критичность) —
+    // редизайн страницы /clients. Отдельная ветка от старого listClients(),
+    // сохраняемого для обратной совместимости.
+    const tab = new URL(request.url).searchParams.get("tab")
+    if (tab) {
+      const { searchParams } = new URL(request.url)
+      const status = searchParams.get("status") as
+        | "active"
+        | "initial"
+        | "suspended"
+        | "deleted"
+        | "blocked"
+        | "all"
+        | null
+      const limit = Number(searchParams.get("limit") ?? "20")
+      const offset = Number(searchParams.get("offset") ?? "0")
+      const result = await listClientsFeed({
+        tab: tab as ClientFeedTab,
+        status: status ?? undefined,
+        limit,
+        offset,
+      })
+      return NextResponse.json(result)
+    }
+
+    // Компания-карточки (аккаунт-менеджмент) показывают выручку за 12 мес.
+    // рядом с базовым списком — один батч-запрос, не по одному на карточку.
+    const [clients, revenue12mo] = await Promise.all([
+      listClients(),
+      listClientRevenue12mo(),
+    ])
+    return NextResponse.json({ clients, revenue12mo })
   } catch (error) {
     return errorResponse(error)
   }
@@ -65,6 +108,7 @@ export async function POST(request: NextRequest) {
       customFields,
       funnelPhase,
       status,
+      currency,
     } = body
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 })
@@ -81,6 +125,7 @@ export async function POST(request: NextRequest) {
       customFields,
       funnelPhase,
       status,
+      currency,
     })
     return NextResponse.json({ success: true, id: result.id })
   } catch (error) {
@@ -104,6 +149,7 @@ export async function PUT(request: NextRequest) {
       customFields,
       funnelPhase,
       status,
+      currency,
     } = body
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 })
@@ -120,6 +166,7 @@ export async function PUT(request: NextRequest) {
       customFields,
       funnelPhase,
       status,
+      currency,
     })
     return NextResponse.json({ success: true })
   } catch (error) {

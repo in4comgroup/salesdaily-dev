@@ -4,19 +4,42 @@ import { db } from "@/db/drizzle"
 import {
   client,
   contact,
-  user,
+  order,
+  deal,
   type FunnelPhase,
   type EntityStatus,
   type ClientLookupCandidateJson,
+  user,
 } from "@/db/schema"
-import { and, eq, ne, desc, isNull, or, count, inArray } from "drizzle-orm"
+import {
+  and,
+  eq,
+  ne,
+  desc,
+  isNull,
+  or,
+  count,
+  inArray,
+  gte,
+} from "drizzle-orm"
+import { computeOrderDiscount } from "@/lib/orders-format"
+import { listDealFunnelStages } from "@/server/deals"
+import {
+  listTaskSummaryByClient,
+  type ClientTaskSummary,
+} from "@/server/tasks"
+import { clientAtRisk } from "@/lib/client-mocks"
 import { generateText, Output, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
 import { getServerSession } from "@/lib/get-session"
+import { DEFAULT_GATEWAY_ID } from "@/lib/llm-models"
 import { randomUUID } from "crypto"
+import { request as httpsRequest } from "node:https"
+import { request as httpRequest } from "node:http"
 import {
   isClientType,
+  isCompanyKind,
   normalizeDiscountPercent,
   orgHasStructuredClientType,
   type ClientCustomFields,
@@ -45,6 +68,7 @@ export type ClientRow = {
   customFields: ClientCustomFields
   funnelPhase: FunnelPhase
   status: EntityStatus
+  currency: string
   userId: string
   userName: string | null
   organizationId: string
@@ -135,6 +159,7 @@ export async function listClients(): Promise<ClientRow[]> {
     customFields: r.client.customFields ?? {},
     funnelPhase: r.client.funnelPhase,
     status: r.client.status,
+    currency: r.client.currency,
     userId: r.client.userId,
     userName: r.userName,
     organizationId: r.client.organizationId,
@@ -142,6 +167,216 @@ export async function listClients(): Promise<ClientRow[]> {
     updatedAt: r.client.updatedAt.toISOString(),
     contacts: contactsByClient.get(r.client.id) ?? [],
   }))
+}
+
+export type ClientRevenueSummary = { revenue: number; orders: number }
+
+// Выручка по компании за последние 12 мес. — один батч-запрос на всю
+// страницу (не по одному на карточку). Те же BOOKED (finalized|confirmed) +
+// NET (computeOrderDiscount) правила, что и в аналитике
+// (src/server/analytics-query.ts), но без top-12-лимита и с окном "последний
+// год" вместо произвольного диапазона дашборда.
+export async function listClientRevenue12mo(): Promise<
+  Record<string, ClientRevenueSummary>
+> {
+  const { activeOrgId } = await requireOrgContext()
+  const since = new Date()
+  since.setFullYear(since.getFullYear() - 1)
+
+  const rows = await db
+    .select({
+      clientId: order.clientId,
+      totalAmount: order.totalAmount,
+      discountPercent: order.discountPercent,
+    })
+    .from(order)
+    .where(
+      and(
+        eq(order.organizationId, activeOrgId),
+        inArray(order.status, ["finalized", "confirmed"]),
+        gte(order.orderDate, since),
+      ),
+    )
+
+  const result: Record<string, ClientRevenueSummary> = {}
+  for (const r of rows) {
+    const { discountedTotal } = computeOrderDiscount(
+      Number(r.totalAmount),
+      Number(r.discountPercent),
+    )
+    const bucket = result[r.clientId] ?? { revenue: 0, orders: 0 }
+    bucket.revenue += discountedTotal
+    bucket.orders += 1
+    result[r.clientId] = bucket
+  }
+  return result
+}
+
+export type ClientFeedTab =
+  | "all"
+  | "customers"
+  | "potential"
+  | "supplier"
+  | "partner"
+  | "unclassified"
+
+// Companies page (redesign): 5 tabs, driven by a mix of deal state (Клиенты/
+// Потенциальные — auto) and a manual `customFields.companyKind` tag
+// (Поставщики/Партнёры, since deal state can't tell them apart — both may
+// have zero deals). A manual tag always wins over deal-derived classification.
+// «Не определено» catches companies with neither signal, so nothing silently
+// disappears from every tab.
+//
+// Sort ("criticality", a heuristic proxy — TODO(backend): a real priority
+// score, mirroring the same disclaimer already on `clientAtRisk` / the deals
+// board's mock `agentPriorityScore`): overdue tasks first, then stale
+// (no-contact) clients, then most-recently-touched first as the final tiebreak.
+//
+// This runs the tab/sort logic in JS over the org's full client set rather
+// than a single paginated SQL query — acceptable at demo/pilot scale, same
+// posture as `src/server/teardown.ts`'s org-wide resolution and the chat's
+// `searchEverything` tool.
+export async function listClientsFeed(params: {
+  tab: ClientFeedTab
+  status?: EntityStatus | "all"
+  limit?: number
+  offset?: number
+}): Promise<{
+  rows: ClientRow[]
+  total: number
+  taskSummary: Record<string, ClientTaskSummary>
+}> {
+  const { activeOrgId } = await requireOrgContext()
+  const limit = Math.min(Math.max(params.limit ?? 20, 1), 50)
+  const offset = Math.max(params.offset ?? 0, 0)
+
+  const stages = await listDealFunnelStages()
+  const closedStageIds = new Set(
+    stages.filter((s) => s.closureProbability >= 1).map((s) => s.id),
+  )
+  const openStageIds = new Set(
+    stages
+      .filter((s) => s.closureProbability > 0 && s.closureProbability < 1)
+      .map((s) => s.id),
+  )
+
+  const dealRows = await db
+    .select({ clientId: deal.clientId, funnelStageId: deal.funnelStageId })
+    .from(deal)
+    .where(and(eq(deal.organizationId, activeOrgId), eq(deal.status, "active")))
+
+  const hasClosed = new Set<string>()
+  const hasOpen = new Set<string>()
+  for (const d of dealRows) {
+    if (closedStageIds.has(d.funnelStageId)) hasClosed.add(d.clientId)
+    else if (openStageIds.has(d.funnelStageId)) hasOpen.add(d.clientId)
+  }
+
+  const statusConditions =
+    params.status && params.status !== "all"
+      ? [eq(client.status, params.status)]
+      : [ne(client.status, "deleted"), ne(client.status, "blocked")]
+
+  const rows = await db
+    .select({ client, userName: user.name })
+    .from(client)
+    .leftJoin(user, eq(client.userId, user.id))
+    .where(and(eq(client.organizationId, activeOrgId), ...statusConditions))
+
+  const taskSummary = await listTaskSummaryByClient()
+
+  const matching = rows.filter((r) => {
+    if (params.tab === "all") return true
+    const kind = r.client.customFields?.companyKind
+    if (kind === "supplier") return params.tab === "supplier"
+    if (kind === "partner") return params.tab === "partner"
+    const closed = hasClosed.has(r.client.id)
+    const open = hasOpen.has(r.client.id)
+    switch (params.tab) {
+      case "customers":
+        return closed
+      case "potential":
+        return !closed && open
+      case "unclassified":
+        return !closed && !open
+      default:
+        return false
+    }
+  })
+
+  matching.sort((a, b) => {
+    const overdueA = taskSummary[a.client.id]?.overdueCount ?? 0
+    const overdueB = taskSummary[b.client.id]?.overdueCount ?? 0
+    if (overdueA !== overdueB) return overdueB - overdueA
+    const staleA = clientAtRisk(a.client.updatedAt.toISOString()) ? 1 : 0
+    const staleB = clientAtRisk(b.client.updatedAt.toISOString()) ? 1 : 0
+    if (staleA !== staleB) return staleB - staleA
+    // Final tiebreak: most-recently-touched first (was oldest-first).
+    return b.client.updatedAt.getTime() - a.client.updatedAt.getTime()
+  })
+
+  const total = matching.length
+  const page = matching.slice(offset, offset + limit)
+
+  const clientIds = page.map((r) => r.client.id)
+  const contacts = clientIds.length
+    ? await db
+        .select()
+        .from(contact)
+        .where(
+          and(
+            eq(contact.organizationId, activeOrgId),
+            ne(contact.status, "deleted"),
+            inArray(contact.clientId, clientIds),
+          ),
+        )
+    : []
+  const contactsByClient = new Map<string, ClientContactPreview[]>()
+  for (const c of contacts) {
+    if (!c.clientId) continue
+    const list = contactsByClient.get(c.clientId) ?? []
+    list.push({
+      id: c.id,
+      name: c.name,
+      nameNative: c.nameNative,
+      email: c.email,
+      phone: c.phone,
+      position: c.position,
+      status: c.status,
+    })
+    contactsByClient.set(c.clientId, list)
+  }
+
+  const pageTaskSummary: Record<string, ClientTaskSummary> = {}
+  for (const id of clientIds) {
+    if (taskSummary[id]) pageTaskSummary[id] = taskSummary[id]
+  }
+
+  return {
+    total,
+    taskSummary: pageTaskSummary,
+    rows: page.map((r) => ({
+      id: r.client.id,
+      name: r.client.name,
+      namePhys: r.client.namePhys,
+      comment: r.client.comment,
+      aliases: r.client.aliases,
+      phone: r.client.phone,
+      email: r.client.email,
+      address: r.client.address,
+      webUrl: r.client.webUrl,
+      customFields: r.client.customFields ?? {},
+      funnelPhase: r.client.funnelPhase,
+      status: r.client.status,
+      currency: r.client.currency,
+      userId: r.client.userId,
+      userName: r.userName,
+      organizationId: r.client.organizationId,
+      createdAt: r.client.createdAt.toISOString(),
+      updatedAt: r.client.updatedAt.toISOString(),
+      contacts: contactsByClient.get(r.client.id) ?? [],
+    })),
+  }
 }
 
 /** Trim, drop empties + dups; return null for an empty list. */
@@ -176,7 +411,16 @@ function normalizeClientCustomFields(
   }
   const discount = normalizeDiscountPercent(raw?.discount)
   if (discount != null) out.discount = discount
+  if (isCompanyKind(raw?.companyKind)) out.companyKind = raw.companyKind
   return out
+}
+
+// Допустимые валюты расчётов. Неизвестное значение приводим к RUB
+// (форма присылает корректные коды; защита от мусора через API).
+const ALLOWED_CURRENCIES = ["RUB", "USD", "EUR", "GBP", "CNY"]
+function normaliseClientCurrency(currency: string | null | undefined): string {
+  const c = (currency ?? "").toUpperCase()
+  return ALLOWED_CURRENCIES.includes(c) ? c : "RUB"
 }
 
 export async function createClient(data: {
@@ -191,6 +435,7 @@ export async function createClient(data: {
   customFields?: ClientCustomFields | null
   funnelPhase?: FunnelPhase
   status?: EntityStatus
+  currency?: string
 }) {
   const { session, activeOrgId } = await requireOrgContext()
   if (!data.name?.trim()) throw new Error("Name is required")
@@ -210,6 +455,7 @@ export async function createClient(data: {
     customFields: normalizeClientCustomFields(activeOrgId, data.customFields),
     funnelPhase: data.funnelPhase ?? "awareness",
     status: data.status ?? "active",
+    currency: normaliseClientCurrency(data.currency),
     userId: session.user.id,
     organizationId: activeOrgId,
     createdAt: now,
@@ -232,6 +478,7 @@ export async function updateClient(
     customFields?: ClientCustomFields | null
     funnelPhase?: FunnelPhase
     status?: EntityStatus
+    currency?: string
   },
 ) {
   const { activeOrgId } = await requireOrgContext()
@@ -278,14 +525,20 @@ export async function updateClient(
         ? { funnelPhase: data.funnelPhase }
         : {}),
       ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.currency !== undefined
+        ? { currency: normaliseClientCurrency(data.currency) }
+        : {}),
     })
     .where(eq(client.id, clientId))
 }
 
 // ── Web lookup (Gemini + grounded google_search) ─────────────────────
 
-const LOOKUP_RESEARCH_MODEL = "google/gemini-2.5-flash"
-const LOOKUP_EXTRACT_MODEL = "google/gemini-2.5-flash"
+// External web search + extraction. Gemini 3.1 Flash Lite runs
+// `google_search` grounding alongside function tools and is cheaper than
+// 2.5 Flash; see src/lib/llm-models.ts.
+const LOOKUP_RESEARCH_MODEL = DEFAULT_GATEWAY_ID
+const LOOKUP_EXTRACT_MODEL = DEFAULT_GATEWAY_ID
 
 // ── Direct homepage fetch (precision booster for the extract pass) ────
 //
@@ -295,14 +548,53 @@ const LOOKUP_EXTRACT_MODEL = "google/gemini-2.5-flash"
 // fetch the homepage + a few likely contact/legal pages and feed the raw
 // text straight into the structured-extract pass as primary-source evidence.
 const FETCH_TIMEOUT_MS = 8000 // per page
-const MAX_EXTRA_PAGES = 3 // contact/impressum/about pages beyond the homepage
-const MAX_PAGE_BYTES = 400_000 // cap each page body before stripping
-const MAX_SITE_TEXT = 14_000 // cap the combined text handed to the LLM
+const MAX_EXTRA_PAGES = 4 // contact/impressum/about pages beyond the homepage
+const MAX_REDIRECTS = 3
+// Raw-HTML cap. Deliberately generous: a Tilda-style one-pager weighs ~1 MB of
+// markup but strips down to ~5 KB of text, and the footer — where the phone and
+// the address live — is the LAST thing in the file. The previous 400 KB cap cut
+// it off silently, which is why site-published phones never reached the model.
+const MAX_PAGE_BYTES = 3_000_000
+const MAX_PAGE_TEXT = 6_000 // per-page text budget (head + footer sample)
+const MAX_SITE_TEXT = 16_000 // cap the combined text handed to the LLM
+// A real browser UA. Anti-DDoS front-ends (DDoS-Guard, Qrator) answer a bot UA
+// with 403 on every sub-page — ntechlab.ru/about does exactly that.
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 // Anchors whose href or label hint at where an address usually lives.
 const ADDRESS_PAGE_HINT =
-  /(contact|kontakt|contacto|contatti|impressum|imprint|about|legal|mentions[-\s]?l[eé]gales|company|firma|standort|location)/i
+  /(contact|kontakt|contacto|contatti|impressum|imprint|about|legal|mentions[-\s]?l[eé]gales|company|firma|standort|location|контакт|адрес|реквизит|о[-\s]?нас|о[-\s]?компании|kontakty|rekvizity|o-kompanii|o-nas)/i
 // Fallback guesses used only when the homepage exposes no hinted links.
-const ADDRESS_PAGE_GUESSES = ["/contact", "/kontakt", "/impressum"]
+const ADDRESS_PAGE_GUESSES = [
+  "/contacts",
+  "/contact",
+  "/kontakty",
+  "/kontakt",
+  "/about",
+  "/o-kompanii",
+  "/impressum",
+]
+
+/**
+ * Accept whatever a human types into the "Сайт" field. A scheme-less
+ * "ntechlab.ru" made `new URL()` throw, which silently disabled the whole
+ * own-site fetch and left the URL-pinned research branch chasing a bare
+ * hostname. Returns "" when there is nothing usable.
+ */
+function normalizeSiteUrl(raw: string | null | undefined): string {
+  const trimmed = (raw ?? "").trim()
+  if (!trimmed) return ""
+  const withScheme = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`
+  try {
+    const u = new URL(withScheme)
+    if (!u.hostname.includes(".")) return ""
+    return u.toString().replace(/\/$/, "")
+  } catch {
+    return ""
+  }
+}
 
 // Minimal HTML → text: drop non-content tags, turn block boundaries into
 // newlines, decode the handful of entities that matter, collapse whitespace.
@@ -327,30 +619,97 @@ function htmlToText(html: string): string {
     .trim()
 }
 
+// Keep a page's text inside budget WITHOUT losing the footer — that is where
+// the address and the phone usually sit, so a plain head-slice throws away the
+// very thing we came for. Sample the head and the tail instead.
+function clampPageText(text: string): string {
+  if (text.length <= MAX_PAGE_TEXT) return text
+  const head = text.slice(0, Math.floor(MAX_PAGE_TEXT * 0.55))
+  const tail = text.slice(-Math.floor(MAX_PAGE_TEXT * 0.45))
+  return `${head}\n…(middle omitted)…\n${tail}`
+}
+
 // Fetch one page → capped raw HTML, or "" on any failure (never throws).
-async function fetchPageRaw(url: string): Promise<string> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
-  try {
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      redirect: "follow",
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (compatible; TruffaloBot/1.0; +https://truffalo.ai)",
-        accept: "text/html,application/xhtml+xml",
+//
+// Uses node:https directly instead of global fetch for ONE reason: anti-DDoS
+// front-ends (ntechlab.ru sits behind DDoS-Guard) hand a self-signed
+// certificate to non-browser clients, so `fetch` dies with
+// DEPTH_ZERO_SELF_SIGNED_CERT before a single byte is read. These are public
+// marketing pages and we send no credentials with the request, so a relaxed
+// certificate check is the difference between reading the company's own site
+// and guessing from third-party news articles.
+function fetchPageRaw(url: string, depth = 0): Promise<string> {
+  return new Promise((resolve) => {
+    let target: URL
+    try {
+      target = new URL(url)
+    } catch {
+      return resolve("")
+    }
+    if (target.protocol !== "https:" && target.protocol !== "http:") {
+      return resolve("")
+    }
+    const secure = target.protocol === "https:"
+    const req = (secure ? httpsRequest : httpRequest)(
+      {
+        hostname: target.hostname,
+        port: target.port || undefined,
+        path: `${target.pathname}${target.search}`,
+        method: "GET",
+        ...(secure
+          ? { rejectUnauthorized: false, servername: target.hostname }
+          : {}),
+        headers: {
+          "user-agent": BROWSER_UA,
+          accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "ru-RU,ru;q=0.9,en;q=0.8",
+          // No gzip — we would have to inflate it ourselves here.
+          "accept-encoding": "identity",
+        },
       },
+      (res) => {
+        const status = res.statusCode ?? 0
+        const location = res.headers.location
+        if (status >= 300 && status < 400 && location && depth < MAX_REDIRECTS) {
+          res.resume()
+          let next: string
+          try {
+            next = new URL(location, target).toString()
+          } catch {
+            return resolve("")
+          }
+          return resolve(fetchPageRaw(next, depth + 1))
+        }
+        if (status !== 200) {
+          res.resume()
+          return resolve("")
+        }
+        const ct = String(res.headers["content-type"] ?? "")
+        if (ct && !ct.includes("html") && !ct.includes("xml")) {
+          res.resume()
+          return resolve("")
+        }
+        let body = ""
+        res.setEncoding("utf8")
+        res.on("data", (chunk: string) => {
+          body += chunk
+          if (body.length > MAX_PAGE_BYTES) {
+            body = body.slice(0, MAX_PAGE_BYTES)
+            res.destroy()
+          }
+        })
+        res.on("close", () => resolve(body))
+        res.on("error", () => resolve(body))
+      },
+    )
+    req.on("error", () => resolve(""))
+    req.setTimeout(FETCH_TIMEOUT_MS, () => {
+      req.destroy()
+      resolve("")
     })
-    if (!res.ok) return ""
-    const ct = res.headers.get("content-type") ?? ""
-    if (ct && !ct.includes("html") && !ct.includes("xml")) return ""
-    const raw = await res.text()
-    return raw.slice(0, MAX_PAGE_BYTES)
-  } catch {
-    return ""
-  } finally {
-    clearTimeout(timer)
-  }
+    req.end()
+  })
 }
 
 // Same-site anchors (homepage host or a sub/parent of it) whose href/label
@@ -385,27 +744,40 @@ function findAddressPageLinks(homeHtml: string, base: URL): string[] {
  * extract pass. Best-effort: returns "" if the homepage can't be fetched.
  */
 async function fetchSiteTextForLookup(knownUrl: string): Promise<string> {
+  const normalized = normalizeSiteUrl(knownUrl)
+  if (!normalized) return ""
   let base: URL
   try {
-    base = new URL(knownUrl)
+    base = new URL(normalized)
   } catch {
     return ""
   }
 
-  const homeRaw = await fetchPageRaw(base.toString())
+  let homeRaw = await fetchPageRaw(base.toString())
+  // Some older RU corporate sites still answer on http only.
+  if (!homeRaw && base.protocol === "https:") {
+    const plain = new URL(base.toString())
+    plain.protocol = "http:"
+    homeRaw = await fetchPageRaw(plain.toString())
+    if (homeRaw) base = plain
+  }
   if (!homeRaw) return ""
 
   let links = findAddressPageLinks(homeRaw, base)
   // No hinted links on the homepage → try a few well-known paths.
   if (links.length === 0) {
-    links = ADDRESS_PAGE_GUESSES.map((p) => new URL(p, base).toString())
+    links = ADDRESS_PAGE_GUESSES.slice(0, MAX_EXTRA_PAGES).map((p) =>
+      new URL(p, base).toString(),
+    )
   }
 
   const extraRaws = await Promise.all(links.map((u) => fetchPageRaw(u)))
 
-  const sections = [`# ${base.toString()}\n${htmlToText(homeRaw)}`]
+  const sections = [
+    `# ${base.toString()}\n${clampPageText(htmlToText(homeRaw))}`,
+  ]
   links.forEach((u, i) => {
-    const t = htmlToText(extraRaws[i] || "")
+    const t = clampPageText(htmlToText(extraRaws[i] || ""))
     if (t) sections.push(`# ${u}\n${t}`)
   })
 
@@ -438,6 +810,21 @@ export type ClientLookupResult = {
   notes: string
 }
 
+/**
+ * Operator-typed search parameters. The stored client row is only a starting
+ * point: whatever the user types in the lookup dialog overrides it for THIS
+ * search (nothing is written to the DB until they press save). A `webUrl` hint
+ * also switches the research on to the URL-pinned branch, which is the single
+ * most effective way to stop name-similarity matches in another country.
+ */
+export type ClientLookupHints = {
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  webUrl?: string | null
+}
+
 const lookupExtractSchema = z.object({
   candidates: z
     .array(
@@ -455,7 +842,7 @@ const lookupExtractSchema = z.object({
         phone: z
           .string()
           .describe(
-            "Primary main-office phone in international format (e.g. '+43 1 234 5678'). Empty string if not found.",
+            "Primary main-office phone, in international format with the country code, exactly as the company publishes it. Do not guess the country code — take it from the source. Empty string if not found.",
           ),
         address: z
           .string()
@@ -508,9 +895,15 @@ const lookupExtractSchema = z.object({
  *
  * NO writes — caller invokes the existing PUT /api/clients to apply
  * whatever the user picks in the preview modal.
+ *
+ * `hints` are the operator's own search parameters (see {@link
+ * ClientLookupHints}): they override the stored row when the prompt is built,
+ * and are passed to the model as authoritative constraints. Omitted → the
+ * search runs off the stored record alone, as the batch enrichment does.
  */
 export async function lookupClientOnWeb(
   clientId: string,
+  hints?: ClientLookupHints,
 ): Promise<ClientLookupResult> {
   const { activeOrgId } = await requireOrgContext()
   const target = await assertClientInOrg(clientId, activeOrgId)
@@ -532,12 +925,32 @@ export async function lookupClientOnWeb(
       ),
     )
 
+  // Operator hints win over the stored row for this one search. `given` marks
+  // the fields the operator typed by hand — those go into the prompt a second
+  // time as hard constraints, because "the company we mean is the one in
+  // Moscow" is exactly the information that stops a .com namesake winning.
+  const hint = (v?: string | null) => (v ?? "").trim()
+  const given = {
+    name: hint(hints?.name),
+    email: hint(hints?.email),
+    phone: hint(hints?.phone),
+    address: hint(hints?.address),
+    webUrl: normalizeSiteUrl(hints?.webUrl),
+  }
+  const effective = {
+    name: given.name || target.name,
+    email: given.email || (target.email ?? "").trim(),
+    phone: given.phone || (target.phone ?? "").trim(),
+    address: given.address || (target.address ?? "").trim(),
+    webUrl: given.webUrl || normalizeSiteUrl(target.webUrl),
+  }
+
   const knownLines = [
-    `Name: ${target.name}`,
-    target.email ? `Email: ${target.email}` : null,
-    target.phone ? `Phone: ${target.phone}` : null,
-    target.address ? `Address: ${target.address}` : null,
-    target.webUrl ? `Website: ${target.webUrl}` : null,
+    `Name: ${effective.name}`,
+    effective.email ? `Email: ${effective.email}` : null,
+    effective.phone ? `Phone: ${effective.phone}` : null,
+    effective.address ? `Address: ${effective.address}` : null,
+    effective.webUrl ? `Website: ${effective.webUrl}` : null,
     contacts.length > 0
       ? `Known contacts: ${contacts
           .map((c) => {
@@ -550,32 +963,53 @@ export async function lookupClientOnWeb(
     .filter(Boolean)
     .join("\n")
 
+  const constraintLines = [
+    given.name ? `- Company name: "${given.name}" — this is the entity meant.` : null,
+    given.webUrl
+      ? `- Official website: ${given.webUrl} — the company behind THIS domain, no other.`
+      : null,
+    given.address
+      ? `- Office / location: ${given.address} — reject any candidate in another city or country.`
+      : null,
+    given.phone ? `- Known phone: ${given.phone}` : null,
+    given.email ? `- Known email: ${given.email}` : null,
+  ].filter(Boolean)
+  const constraints =
+    constraintLines.length > 0
+      ? `
+
+Operator-confirmed parameters. These come from the CRM user, who knows this client — they are authoritative. Any candidate that contradicts them is the wrong company:
+${constraintLines.join("\n")}`
+      : ""
+
   // A known website URL is the authoritative identity of the company: when
   // it's present we pin all research to that one site and never offer
   // name-similarity alternatives (the URL, not the name, is the key criterion).
-  const knownUrl = (target.webUrl ?? "").trim()
+  const knownUrl = effective.webUrl
   const hasKnownUrl = knownUrl.length > 0
 
   // ── Pass 1: grounded research ───────────────────────────────────────
   const researchPrompt = hasKnownUrl
     ? `I have the following CRM record for a company:
 
-${knownLines}
+${knownLines}${constraints}
 
 This record already has a confirmed official website: ${knownUrl}
 
 Research ONLY this exact organisation — the one that owns ${knownUrl}. Use web search to read that website (and pages directly under that same domain) to gather: official company name, primary contact email, main-office phone, headquarters address. The website URL is the authoritative identity of this company.
 
-Do NOT consider, search for, or mention any other company that merely has a similar name — only the organisation behind ${knownUrl} matters here.
+Do NOT consider, search for, or mention any other company that merely has a similar name — only the organisation behind ${knownUrl} matters here. Contact details published on ${knownUrl} itself outrank anything a news site, directory or aggregator says. Search in the language of that website as well as in English.
 
-Write 1–3 short paragraphs of research notes summarising what you found on that website. Do NOT fabricate facts — only state what your search results actually confirm.`
+Write 1–3 short paragraphs of research notes summarising what you found on that website. State for each detail where it came from. Do NOT fabricate facts — only state what your search results actually confirm.`
     : `I have the following CRM record for a company:
 
-${knownLines}
+${knownLines}${constraints}
 
 Use web search to research this company. Identify the most likely real-world organisation (or organisations, if the name is ambiguous). For each candidate, gather: official company name, primary contact email, main-office phone, headquarters address, official website URL.
 
-Write 2–4 short paragraphs of research notes summarising what you found. If multiple companies share this name, note them separately. Do NOT fabricate facts — only state what your search results actually confirm.`
+Search in the local language of the operator-confirmed location as well as in English — the company's own local-language site is a better source than an English directory.
+
+Write 2–4 short paragraphs of research notes summarising what you found. If multiple companies share this name, note them separately, and say which one fits the operator-confirmed parameters. Do NOT fabricate facts — only state what your search results actually confirm.`
 
   // When we know the company's own URL, fetch its actual page text in
   // parallel with the grounded research — grounding only sees snippets, so
@@ -592,6 +1026,9 @@ Write 2–4 short paragraphs of research notes summarising what you found. If mu
     tools: { google_search: google.tools.googleSearch({}) },
     // Bound the search → fetch → answer loop so the model can't spiral.
     stopWhen: stepCountIs(5),
+    // Same input must give the same answer: two runs of this lookup used to
+    // return a different address and drop the phone entirely.
+    temperature: 0,
   })
 
   const siteText = await sitePromise
@@ -609,7 +1046,7 @@ Write 2–4 short paragraphs of research notes summarising what you found. If mu
   // ── Pass 2: structured extraction ───────────────────────────────────
   const extractPrompt = hasKnownUrl
     ? `CRM record (current fields):
-${knownLines}
+${knownLines}${constraints}
 
 Research notes from web search (about ${knownUrl} only):
 ${research.text || "(no research output)"}
@@ -623,21 +1060,24 @@ ${siteText}
 `
     : ""
 }
-The record's website URL (${knownUrl}) is the authoritative identity of this company. Return EXACTLY ONE candidate, describing the organisation behind ${knownUrl}. Set its webUrl to ${knownUrl}. Do NOT add alternative companies based on name similarity. Fill every field the research notes or website text confirm, and use empty strings for fields neither established. Set confidence to "high".`
+The record's website URL (${knownUrl}) is the authoritative identity of this company. Return EXACTLY ONE candidate, describing the organisation behind ${knownUrl}. Set its webUrl to ${knownUrl}. Do NOT add alternative companies based on name similarity. Fill every field the research notes or website text confirm, and use empty strings for fields neither established. Set confidence to "high".
+
+Field precedence, strongest first: (1) the raw text of the company's own website above, (2) the research notes, (3) nothing — leave the field empty. Never replace an operator-confirmed parameter with a value from a news site, directory or registry; a value from the company's own website may replace it, and if the two disagree, say so in "notes".`
     : `CRM record (current fields):
-${knownLines}
+${knownLines}${constraints}
 
 Research notes from web search:
 ${research.text || "(no research output)"}
 
-Based on the research notes, extract up to 3 candidate companies that could be the right match for this CRM record. Sort by confidence (best first). For each candidate, fill every field that the research notes confirm, and use empty strings for fields the research didn't establish. Use the candidates' likely match against the input record's address / contact email when rating confidence.`
+Based on the research notes, extract up to 3 candidate companies that could be the right match for this CRM record. Sort by confidence (best first). For each candidate, fill every field that the research notes confirm, and use empty strings for fields the research didn't establish. Rate confidence by how well the candidate fits the operator-confirmed parameters and the record's address / contact email. Drop any candidate that contradicts an operator-confirmed parameter — do not return it as a lower-confidence alternative.`
 
   const { output: extracted } = await generateText({
     model: LOOKUP_EXTRACT_MODEL,
     output: Output.object({ schema: lookupExtractSchema }),
     system:
-      "You convert research notes and raw company-website text into structured candidate records. Never invent fields — if neither the research notes nor the website text confirms a value, return an empty string for that field. When raw website text is provided it is primary-source evidence and outranks the research notes. Use empty arrays for the candidates list if no plausible match was found.",
+      "You convert research notes and raw company-website text into structured candidate records. Never invent fields — if neither the research notes nor the website text confirms a value, return an empty string for that field. When raw website text is provided it is primary-source evidence and outranks the research notes. Operator-confirmed parameters outrank third-party sources. Use empty arrays for the candidates list if no plausible match was found.",
     prompt: extractPrompt,
+    temperature: 0,
   })
 
   return {

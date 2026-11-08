@@ -1,6 +1,6 @@
 "use server"
 
-import nylas from "@/lib/nylas"
+import { getNylasClient, describeNylasError } from "@/lib/nylas"
 import {
   upsertSourceItem,
   getLatestSourceCreatedAt,
@@ -35,7 +35,11 @@ export async function syncNylasEmails(
     )
   }
 
-  const { grantId } = getNylasCredentials(ctx.id, ctx.credentialsRef)
+  const creds = getNylasCredentials(ctx.id, ctx.credentialsRef)
+  const { grantId } = creds
+  // Per-source Nylas application when the org connected its own account;
+  // the platform app otherwise.
+  const client = getNylasClient(creds)
 
   // The window's `since` only ever EXTENDS the fetch earlier (lower of the two
   // bounds), never narrows it — so the default (period = today) degenerates to
@@ -59,15 +63,23 @@ export async function syncNylasEmails(
   }
   const receivedBefore = windowUntil ?? undefined
 
-  const response = await nylas.messages.list({
-    identifier: grantId,
-    queryParams: {
-      limit: SYNC_PAGE_LIMIT,
-      in: ["INBOX"],
-      ...(receivedAfter !== undefined ? { receivedAfter } : {}),
-      ...(receivedBefore !== undefined ? { receivedBefore } : {}),
-    },
-  })
+  // `describeNylasError` only rewrites the SDK's unreadable
+  // "could not parse response" case; everything else passes through
+  // untouched so the provider-missing classifiers still recognise it.
+  let response
+  try {
+    response = await client.messages.list({
+      identifier: grantId,
+      queryParams: {
+        limit: SYNC_PAGE_LIMIT,
+        in: ["INBOX"],
+        ...(receivedAfter !== undefined ? { receivedAfter } : {}),
+        ...(receivedBefore !== undefined ? { receivedBefore } : {}),
+      },
+    })
+  } catch (err) {
+    throw describeNylasError(err, ctx.id)
+  }
 
   let inserted = 0
   let updated = 0

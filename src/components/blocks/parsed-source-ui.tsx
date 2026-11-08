@@ -172,9 +172,9 @@ export function ParsedBlock({
         body: JSON.stringify({ sourceId, parentSourceId, markdown }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Не удалось сохранить в R2")
+      if (!res.ok) throw new Error(data.error || "Не удалось сохранить в хранилище")
       setSavedKey(data.key)
-      toast.success(`Сохранено в R2: ${data.key}`)
+      toast.success(`Сохранено в хранилище: ${data.key}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Неизвестная ошибка"
       toast.error(msg)
@@ -201,7 +201,7 @@ export function ParsedBlock({
             ) : (
               <CloudUpload className="h-4 w-4 mr-1" />
             )}
-            {saving ? "Сохранение…" : savedKey ? "Сохранено" : "Сохранить в R2"}
+            {saving ? "Сохранение…" : savedKey ? "Сохранено" : "Сохранить в хранилище"}
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={handleCopy}>

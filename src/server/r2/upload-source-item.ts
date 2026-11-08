@@ -3,7 +3,7 @@ import "server-only"
 import { eq } from "drizzle-orm"
 import { db } from "@/db/drizzle"
 import { sourceItem } from "@/db/schema"
-import { putMarkdownToR2 } from "@/lib/r2"
+import { putMarkdown } from "@/lib/storage"
 
 // Result of a single uploadSourceItem call. Both branches are
 // non-throwing — the caller (manual route OR daily pipeline) decides
@@ -89,7 +89,7 @@ export async function uploadSourceItem(
   const key = `${orgSegment}/source_${row.sourceId}/item_${row.id}.md`
 
   try {
-    const uploaded = await putMarkdownToR2(key, row.parsedMarkdown)
+    const uploaded = await putMarkdown(key, row.parsedMarkdown)
     const now = new Date()
     await db
       .update(sourceItem)

@@ -227,7 +227,7 @@ export function ClientContentTable({
             Источник
           </label>
           <Select value={sourceId} onValueChange={setSourceId}>
-            <SelectTrigger className="h-8 w-full justify-between text-sm">
+            <SelectTrigger size="sm" className="w-full justify-between text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -246,7 +246,7 @@ export function ClientContentTable({
             Тип файла
           </label>
           <Select value={mime} onValueChange={setMime}>
-            <SelectTrigger className="h-8 w-full justify-between text-sm">
+            <SelectTrigger size="sm" className="w-full justify-between text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -407,7 +407,7 @@ export function ClientContentTable({
                         onClick={() => openPreview(row)}
                         title={
                           canPreview
-                            ? "Просмотр разобранного текста из R2"
+                            ? "Просмотр разобранного текста из хранилища"
                             : "Просмотр недоступен"
                         }
                       >

@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { LoadingButton } from "@/components/blocks/loading-button"
@@ -29,6 +28,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { toast } from "sonner"
+import { BlacklistEntityButton } from "@/components/blocks/client-blocklist-dialog"
 import type { ContactRow, ClientOption } from "@/app/api/contacts/route"
 import type { EntityStatus } from "@/db/schema"
 
@@ -73,16 +73,35 @@ type Props = {
   mode: "create" | "edit"
   contact?: ContactRow
   trigger: React.ReactNode
-  onSuccess?: () => void
+  onSuccess?: (createdId?: string) => void
+  defaultClientId?: string
+  // Optional controlled open state — lets a parent open this dialog
+  // programmatically (e.g. the /contacts page's `?openContact=<id>` deep-link
+  // from the global search) without a click on `trigger`. Omit both for the
+  // usual uncontrolled click-to-open behaviour.
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  // When true (owner) and editing, shows the "add to blocklist" action in
+  // the footer — lives here (with editing) rather than as a standalone icon
+  // on the contact card, see refs/blocklist.md.
+  canBlock?: boolean
 }
 
-export default function ContactEditDialog({
+export function ContactEditForm({
   mode,
   contact,
-  trigger,
+  defaultClientId,
   onSuccess,
-}: Props) {
-  const [open, setOpen] = useState(false)
+  onCancel,
+  canBlock = false,
+}: {
+  mode: "create" | "edit"
+  contact?: ContactRow
+  defaultClientId?: string
+  onSuccess?: (createdId?: string) => void
+  onCancel?: () => void
+  canBlock?: boolean
+}) {
   const [isPending, startTransition] = useTransition()
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
 
@@ -94,13 +113,15 @@ export default function ContactEditDialog({
       phone: contact?.phone ?? "",
       email: contact?.email ?? "",
       position: contact?.position ?? "",
-      clientId: contact?.clientId ?? NO_CLIENT,
+      clientId:
+        mode === "create"
+          ? (defaultClientId ?? NO_CLIENT)
+          : (contact?.clientId ?? NO_CLIENT),
       status: contact?.status ?? "active",
     },
   })
 
   useEffect(() => {
-    if (!open) return
     form.reset({
       name: contact?.name ?? "",
       nameNative: contact?.nameNative ?? "",
@@ -108,7 +129,10 @@ export default function ContactEditDialog({
       phone: contact?.phone ?? "",
       email: contact?.email ?? "",
       position: contact?.position ?? "",
-      clientId: contact?.clientId ?? NO_CLIENT,
+      clientId:
+        mode === "create"
+          ? (defaultClientId ?? NO_CLIENT)
+          : (contact?.clientId ?? NO_CLIENT),
       status: contact?.status ?? "active",
     })
     let cancelled = false
@@ -122,7 +146,7 @@ export default function ContactEditDialog({
     return () => {
       cancelled = true
     }
-  }, [open, contact, form])
+  }, [contact, form, mode, defaultClientId])
 
   const onSubmit = (data: ContactFormData) => {
     startTransition(async () => {
@@ -146,14 +170,220 @@ export default function ContactEditDialog({
           toast.error(err.error || "Не удалось сохранить контакт")
           return
         }
+        const json = await res.json().catch(() => ({}))
         toast.success(mode === "create" ? "Контакт создан" : "Контакт обновлён")
-        onSuccess?.()
-        setOpen(false)
+        onSuccess?.(json?.id)
       } catch {
         toast.error("Не удалось сохранить контакт")
       }
     })
   }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            control={form.control}
+            name="name"
+            rules={{ required: "Укажите имя" }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-gray-400">Имя *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Имя контакта" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="nameNative"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-gray-400">
+                  Имя на родном языке
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Имя на родном языке (напр. 张伟)"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-gray-400">Телефон</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="+7 999 000 0000" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-gray-400">Email</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="email"
+                    placeholder="hello@example.com"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="position"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-gray-400">Должность</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="напр. директор по ИТ" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="aliases"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-gray-400">
+                Другие имена
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  placeholder="Другие написания / прозвища через запятую (напр. Евгений Богданов, Женя)"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            control={form.control}
+            name="clientId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-gray-400">Клиент</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Без клиента" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={NO_CLIENT}>Без клиента</SelectItem>
+                    {clientOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-gray-400">Статус</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {STATUS_LABEL[s] ?? s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2 pt-2">
+          {mode === "edit" && contact && canBlock && contact.status !== "blocked" ? (
+            <BlacklistEntityButton
+              entityType="contact"
+              id={contact.id}
+              name={contact.nameNative || contact.name}
+              label="Добавить в список блокировки"
+              onBlocked={() => onSuccess?.()}
+            />
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onCancel?.()}
+            >
+              Отмена
+            </Button>
+            <LoadingButton type="submit" loading={isPending}>
+              {mode === "create" ? "Создать" : "Сохранить"}
+            </LoadingButton>
+          </div>
+        </div>
+      </form>
+    </Form>
+  )
+}
+
+export default function ContactEditDialog({
+  mode,
+  contact,
+  trigger,
+  onSuccess,
+  defaultClientId,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+  canBlock = false,
+}: Props) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = setControlledOpen ?? setInternalOpen
 
   const title =
     mode === "create"
@@ -167,181 +397,17 @@ export default function ContactEditDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="name"
-                rules={{ required: "Укажите имя" }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-400">Имя *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Имя контакта" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="nameNative"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-400">
-                      Имя на родном языке
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Имя на родном языке (напр. 张伟)"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-400">Телефон</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="+7 999 000 0000" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-400">Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="email"
-                        placeholder="hello@example.com"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="position"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-gray-400">Должность</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="напр. директор по ИТ" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="aliases"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-gray-400">
-                    Другие имена
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Другие написания / прозвища через запятую (напр. Евгений Богданов, Женя)"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="clientId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-400">Клиент</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Без клиента" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NO_CLIENT}>Без клиента</SelectItem>
-                        {clientOptions.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-400">Статус</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {STATUSES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {STATUS_LABEL[s] ?? s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
-                Отмена
-              </Button>
-              <LoadingButton type="submit" loading={isPending}>
-                {mode === "create" ? "Создать" : "Сохранить"}
-              </LoadingButton>
-            </DialogFooter>
-          </form>
-        </Form>
+        <ContactEditForm
+          mode={mode}
+          contact={contact}
+          defaultClientId={defaultClientId}
+          canBlock={canBlock}
+          onSuccess={(id) => {
+            onSuccess?.(id)
+            setOpen(false)
+          }}
+          onCancel={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   )

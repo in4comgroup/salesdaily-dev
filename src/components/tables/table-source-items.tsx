@@ -453,7 +453,7 @@ export function TableSourceItems({
             value={view}
             onValueChange={(v) => setView(v as SourceItemView)}
           >
-            <SelectTrigger className="h-8 w-full justify-between text-sm">
+            <SelectTrigger size="sm" className="w-full justify-between text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -470,7 +470,7 @@ export function TableSourceItems({
             Источник
           </label>
           <Select value={sourceFilter} onValueChange={setSourceFilter}>
-            <SelectTrigger className="h-8 w-full justify-between text-sm">
+            <SelectTrigger size="sm" className="w-full justify-between text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -767,7 +767,7 @@ function RowActions({
           className="h-7 w-7 p-0"
           disabled={disabled || inFlight === "reparse"}
           onClick={onReparse}
-          title="Повторный разбор (удаляет дочерние элементы и строку R2, заново из очереди)"
+          title="Повторный разбор (удаляет дочерние элементы и файл в хранилище, заново из очереди)"
         >
           {inFlight === "reparse" ? (
             <Loader className="h-3.5 w-3.5 animate-spin" />

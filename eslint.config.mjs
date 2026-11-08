@@ -12,10 +12,6 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Workflow SDK auto-generated route handlers — bundled JS with
-    // a vestigial `/* eslint-disable */` comment that ESLint warns
-    // about as "unused". Source of truth is src/workflows/*.workflow.ts.
-    "src/app/.well-known/workflow/**",
   ]),
   // Vendored shadcn / Vercel AI Elements components are installed via
   // registry CLIs and get overwritten on update. Fixing React Compiler

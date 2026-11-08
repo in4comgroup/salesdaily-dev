@@ -1,36 +1,41 @@
 import { NextRequest, NextResponse } from "next/server"
-import { start } from "workflow/api"
-import { dailyPipelineWorkflow } from "@/workflows/daily-pipeline.workflow"
+import { runDailyPipeline } from "@/server/orchestration/daily-pipeline"
 
-// Cron-triggered entrypoint. Vercel Cron Jobs hit this route on the
-// schedule declared in `vercel.ts` (ORCHESTRATION_CONFIG.cron). When
-// `CRON_SECRET` is set as a project env var, Vercel attaches
-// `Authorization: Bearer $CRON_SECRET` to every scheduled invocation —
-// rejecting anything else keeps the route off the open internet.
+// Cron-triggered entrypoint. A Kubernetes CronJob (deploy/k8s/app/cronjob.yaml,
+// `0 3 * * *` — keep in sync with ORCHESTRATION_CONFIG.cron) curls this
+// route over the in-cluster Service with `Authorization: Bearer
+// $CRON_SECRET`; rejecting anything else keeps the route safe even though
+// it is also reachable through the public ingress.
 //
-// In development we skip the auth check so the admin "Run pipeline now"
-// button OR a local curl can hit it without setting up the header.
+// In development we skip the auth check so a local curl can hit it
+// without setting up the header.
 //
-// The route is intentionally tiny: validate, kick off the workflow,
-// return. The workflow itself takes over from there (Fluid Compute,
-// durable steps, observability dashboard). Doing more here would push
-// orchestration logic into the route, defeating the whole point of the
-// detachable orchestration layer.
+// The pipeline runs synchronously inside the request and the response
+// carries its result, so the CronJob's exit status reflects success or
+// failure. The call goes through the cluster-internal Service (no ingress),
+// so no proxy timeout applies; curl's own `--max-time` bounds it.
+// Overlapping runs are prevented by the CronJob's `concurrencyPolicy:
+// Forbid`. The orchestration itself stays engine-agnostic — this route is
+// the only scheduler-specific glue.
+export const maxDuration = 3600
+
 export async function GET(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
     const auth = request.headers.get("authorization")
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
   }
 
   try {
-    await start(dailyPipelineWorkflow, [])
-    return NextResponse.json({ ok: true, started: true })
+    const result = await runDailyPipeline({ trigger: "cron" })
+    return NextResponse.json(result, {
+      status: result.status === "success" ? 200 : 500,
+    })
   } catch (error) {
-    console.error("[cron/daily] Failed to start workflow:", error)
+    console.error("[cron/daily] Pipeline run failed:", error)
     const message =
-      error instanceof Error ? error.message : "Failed to start workflow"
+      error instanceof Error ? error.message : "Pipeline run failed"
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
 import { db } from "@/db/drizzle"
 import { sourceItem } from "@/db/schema"
-import { getMarkdownFromR2 } from "@/lib/r2"
+import { getMarkdown } from "@/lib/storage"
 import {
   assertSourceItemInScope,
   SourceItemScopeError,
@@ -73,12 +73,12 @@ export async function GET(
   }
   if (row.markdownR2Key) {
     try {
-      const markdown = await getMarkdownFromR2(row.markdownR2Key)
+      const markdown = await getMarkdown(row.markdownR2Key)
       return NextResponse.json({ markdown, source: "r2" })
     } catch (error) {
-      console.error("[items/markdown] R2 fetch error:", error)
+      console.error("[items/markdown] storage fetch error:", error)
       const message =
-        error instanceof Error ? error.message : "Failed to fetch from R2"
+        error instanceof Error ? error.message : "Failed to fetch from storage"
       return NextResponse.json({ error: message }, { status: 500 })
     }
   }

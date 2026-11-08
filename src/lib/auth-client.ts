@@ -6,7 +6,6 @@ import {
   inferOrgAdditionalFields,
 } from "better-auth/client/plugins"
 import { apiKeyClient } from "@better-auth/api-key/client"
-import { polarClient } from "@polar-sh/better-auth"
 import type { auth } from "@/lib/auth"
 
 const baseUrl =
@@ -17,7 +16,6 @@ const baseUrl =
 export const authClient = createAuthClient({
   baseURL: baseUrl,
   plugins: [
-    polarClient(),
     organizationClient({
       schema: inferOrgAdditionalFields<typeof auth>(),
     }),

@@ -13,8 +13,6 @@ import {
 } from "better-auth/plugins"
 import { apiKey } from "@better-auth/api-key"
 import { nextCookies } from "better-auth/next-js"
-import { polar, checkout, portal, usage } from "@polar-sh/better-auth"
-import { Polar } from "@polar-sh/sdk"
 import { getActiveOrganization } from "@/server/organizations"
 import {
   uniqueUsernameGenerator,
@@ -30,19 +28,12 @@ const config: Config = {
   style: "lowerCase",
 }
 
-const polarClient = new Polar({
-  accessToken: process.env.POLAR_ACCESS_TOKEN,
-  server: "sandbox",
-  // Use 'sandbox' if you're using the Polar Sandbox environment
-  // Remember that access tokens, products, etc. are completely separated between environments.
-  // Access tokens obtained in Production are for instance not usable in the Sandbox environment.
-})
-
 export const auth = betterAuth({
   trustedOrigins: [
     "https://app.truffalo.ai",
     "https://business-os-demo.vercel.app",
     "http://localhost:3000",
+    "https://salesdaily-demo.vercel.app",
   ],
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -251,37 +242,12 @@ export const auth = betterAuth({
       adminUserIds: ["f4c577O0wsUOkzxTAUeRAHfKNlvLyQeZ"],
     }),
     apiKey(),
-    polar({
-      client: polarClient,
-      createCustomerOnSignUp: true,
-      use: [
-        checkout({
-          products: [
-            {
-              productId: "4411934b-5c8e-482d-b9fc-dd88c5ab625f",
-              slug: "Test-credit",
-            },
-          ],
-          successUrl: process.env.POLAR_SUCCESS_URL,
-          authenticatedUsersOnly: true,
-        }),
-        portal(),
-        usage(),
-        // webhooks({
-        // secret: process.env.POLAR_WEBHOOK_SECRET,
-        // onCustomerStateChanged: (payload) => // Triggered when anything regarding a customer changes
-        // onOrderPaid: (payload) => // Triggered when an order was paid (purchase, subscription renewal, etc.)
-        // onPayload: (payload) => // Catch-all for all events
-        // })
-      ],
-    }),
     oAuthProxy({
       productionURL:
         process.env.NEXT_PUBLIC_PRODUCTION_URL ||
         process.env.NEXT_PUBLIC_APP_URL ||
-        "https://business-os-demo.vercel.app",
-      currentURL:
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "https://salesdaily-demo.vercel.app",
+      currentURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     }),
   ],
 })

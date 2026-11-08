@@ -31,7 +31,7 @@ import {
   type SourceItemKind,
   type SourceProvider,
 } from "@/db/schema"
-import { getMarkdownFromR2 } from "@/lib/r2"
+import { getMarkdown } from "@/lib/storage"
 
 // All fields on the row that fetch-time sync code knows how to populate.
 // Parse-time and R2-time fields (parseStatus, parsedAt, parserVersion,
@@ -804,7 +804,7 @@ export async function getSourceItemMarkdown(
     return null
   }
   if (row.parsedMarkdown) return row.parsedMarkdown
-  if (row.markdownR2Key) return await getMarkdownFromR2(row.markdownR2Key)
+  if (row.markdownR2Key) return await getMarkdown(row.markdownR2Key)
   return null
 }
 

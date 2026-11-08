@@ -31,7 +31,7 @@ import {
 import { companyMatchKey, personMatchKey } from "@/lib/translit-ru"
 import { isAutomatedEmail } from "@/lib/is-automated-email"
 import { getServerSession } from "@/lib/get-session"
-import { deleteFromR2 } from "@/lib/r2"
+import { deleteObjects } from "@/lib/storage"
 
 export class TeardownError extends Error {
   constructor(
@@ -657,7 +657,7 @@ export async function executeSourceTeardown(input: {
   // ── Delete in FK-safe order (see refs/source-teardown.md §3) ──────────
   // R2 → tasks → deals → orders(+requests) → cards → contacts → clients →
   // source_items → (conditional) reset cursor → teardown_log.
-  const r2Deleted = await deleteFromR2(selectedR2Keys)
+  const r2Deleted = await deleteObjects(selectedR2Keys)
 
   if (taskIds.length > 0)
     await db.delete(task).where(inArray(task.id, taskIds))

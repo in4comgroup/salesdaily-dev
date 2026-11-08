@@ -17,15 +17,14 @@
 /.next/
 /out/
 
-# vercel workflow SDK auto-generated route handlers (rebuilt on `next dev` /
-# `next build`; the source of truth is /src/workflows/*.workflow.ts)
-/src/app/.well-known/workflow/
-
 # production
 /build
 
 # misc
 .DS_Store
+# AppleDouble files (macOS writes these alongside a file when copied to a
+# filesystem that can't hold its extended metadata — no content of their own)
+._*
 *.pem
 
 # debug
@@ -63,3 +62,8 @@ stale-ui-updates.md
 
 # data imports
 /WhatsAppChatHistory
+
+.idea
+
+docs/deploy
+OVERVIEW.md

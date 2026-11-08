@@ -1,0 +1,20 @@
+# cert-manager (Helm chart jetstack/cert-manager).
+#
+#   helm upgrade --install cert-manager jetstack/cert-manager \
+#     -n cert-manager --create-namespace -f deploy/k8s/infra/cert-manager-values.yaml
+#
+# WORKAROUND (h3llo salesdaily-dev): the hosted control plane can reach the
+# NODES (kubectl logs/exec work via kubelet) but not the POD network, so the
+# API server's admission calls to cert-manager-webhook time out
+# ("failed calling webhook … context deadline exceeded"). Running the
+# webhook on the host network makes it reachable at the node IP instead.
+# Drop `hostNetwork` once the provider fixes control-plane → pod routing.
+
+crds:
+  enabled: true
+
+webhook:
+  hostNetwork: true
+  # Must not clash with anything listening on the node (kubelet 10250,
+  # Cilium health/agent ports); 10260 is the chart's documented choice.
+  securePort: 10260

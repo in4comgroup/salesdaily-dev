@@ -4,6 +4,8 @@ import { authClient } from "@/lib/auth-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader } from "lucide-react"
 import { TableRules } from "@/components/tables/table-rules"
+import { GlobalSearch } from "@/components/blocks/global-search"
+import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
 
 export default function RulesPage() {
   const { data: session, isPending } = authClient.useSession()
@@ -19,10 +21,16 @@ export default function RulesPage() {
   const isAdmin = session?.user?.role === "admin"
 
   return (
-    <div className="flex flex-col gap-6 items-center justify-start min-h-screen pb-8">
-      <h1 className="text-2xl font-medium mt-2">ПРАВИЛА</h1>
+    <div className="flex flex-col gap-4 p-4 pb-10 min-h-screen">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-medium">Правила</h1>
+        <div className="flex items-center gap-2">
+          <AiChatTrigger />
+          <GlobalSearch />
+        </div>
+      </div>
 
-      <Card className="w-full max-w-7xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="text-xl font-medium">Системные правила</CardTitle>
         </CardHeader>
@@ -37,7 +45,7 @@ export default function RulesPage() {
         </CardContent>
       </Card>
 
-      <Card className="w-full max-w-7xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="text-xl font-medium">Пользовательские правила</CardTitle>
         </CardHeader>

@@ -2,7 +2,7 @@
 
 import { db } from "@/db/drizzle"
 import { contact, client, user, type EntityStatus } from "@/db/schema"
-import { and, eq, desc, inArray } from "drizzle-orm"
+import { and, asc, eq, desc, ilike, inArray, isNull, or } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
 import { randomUUID } from "crypto"
 
@@ -94,6 +94,119 @@ export async function listContacts(): Promise<ContactRow[]> {
     createdAt: r.contact.createdAt.toISOString(),
     updatedAt: r.contact.updatedAt.toISOString(),
   }))
+}
+
+export async function getContact(contactId: string): Promise<ContactRow | null> {
+  const { activeOrgId } = await requireOrgContext()
+
+  const rows = await db
+    .select({
+      contact,
+      userName: user.name,
+      clientName: client.name,
+    })
+    .from(contact)
+    .leftJoin(user, eq(contact.userId, user.id))
+    .leftJoin(client, eq(contact.clientId, client.id))
+    .where(and(eq(contact.id, contactId), eq(contact.organizationId, activeOrgId)))
+    .limit(1)
+
+  const r = rows[0]
+  if (!r) return null
+
+  return {
+    id: r.contact.id,
+    name: r.contact.name,
+    nameNative: r.contact.nameNative,
+    aliases: r.contact.aliases,
+    phone: r.contact.phone,
+    email: r.contact.email,
+    position: r.contact.position,
+    clientId: r.contact.clientId,
+    clientName: r.clientName,
+    status: r.contact.status,
+    userId: r.contact.userId,
+    userName: r.userName,
+    organizationId: r.contact.organizationId,
+    createdAt: r.contact.createdAt.toISOString(),
+    updatedAt: r.contact.updatedAt.toISOString(),
+  }
+}
+
+// Standalone «Контакты» page: server-paginated, alphabetical (the one list
+// in the app that does NOT default to updatedAt desc — the task explicitly
+// asked for a plain alphabetical directory). `listContacts()` above stays
+// untouched — discovery and `ClientRow.contacts` assembly still use it.
+export async function listContactsPaged(params: {
+  q?: string
+  status?: EntityStatus | "all"
+  clientId?: string | "none" | "all"
+  limit?: number
+  offset?: number
+}): Promise<{ rows: ContactRow[]; total: number }> {
+  const { activeOrgId } = await requireOrgContext()
+  const limit = Math.min(Math.max(params.limit ?? 25, 1), 100)
+  const offset = Math.max(params.offset ?? 0, 0)
+
+  const conditions = [eq(contact.organizationId, activeOrgId)]
+  if (params.status && params.status !== "all") {
+    conditions.push(eq(contact.status, params.status))
+  } else {
+    // Default (no explicit status picked): hide deleted/blocked, same
+    // convention as the Companies feed.
+    conditions.push(inArray(contact.status, ["active", "initial", "suspended"]))
+  }
+  const q = params.q?.trim()
+  if (q) {
+    conditions.push(
+      or(
+        ilike(contact.name, `%${q}%`),
+        ilike(contact.nameNative, `%${q}%`),
+        ilike(contact.email, `%${q}%`),
+      )!,
+    )
+  }
+  if (params.clientId === "none") {
+    conditions.push(isNull(contact.clientId))
+  } else if (params.clientId && params.clientId !== "all") {
+    conditions.push(eq(contact.clientId, params.clientId))
+  }
+
+  const where = and(...conditions)
+
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select({ contact, userName: user.name, clientName: client.name })
+      .from(contact)
+      .leftJoin(user, eq(contact.userId, user.id))
+      .leftJoin(client, eq(contact.clientId, client.id))
+      .where(where)
+      .orderBy(asc(contact.name))
+      .limit(limit)
+      .offset(offset),
+    db.select({ id: contact.id }).from(contact).where(where),
+  ])
+
+  return {
+    total: totalRows.length,
+    rows: rows.map((r) => ({
+      id: r.contact.id,
+      name: r.contact.name,
+      nameNative: r.contact.nameNative,
+      aliases: r.contact.aliases,
+      phone: r.contact.phone,
+      email: r.contact.email,
+      position: r.contact.position,
+      clientId: r.contact.clientId,
+      clientName: r.clientName,
+      status: r.contact.status,
+      userId: r.contact.userId,
+      userName: r.userName,
+      organizationId: r.contact.organizationId,
+      createdAt: r.contact.createdAt.toISOString(),
+      updatedAt: r.contact.updatedAt.toISOString(),
+    })),
+  }
 }
 
 export type ClientOption = { id: string; name: string }

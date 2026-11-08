@@ -1,0 +1,85 @@
+# Next.js standalone server (image built by .github/workflows/docker-image.yml).
+#
+# Runtime config comes entirely from the `crm-env` Secret (see env.example);
+# NEXT_PUBLIC_* are baked in at image build time and are NOT read from here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm
+  labels:
+    app: crm
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: crm
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: crm
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      # Spread the two replicas across the two worker nodes.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: crm
+      # The daily pipeline runs inside a request on one of these pods; give
+      # in-flight work time to finish on rollout.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: app
+          image: ghcr.io/artuomvproskunin/ru-crm-v1   # tag set in kustomization.yaml
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: crm-env
+          env:
+            # replicas × DATABASE_POOL_MAX must stay under the managed PG
+            # connection limit.
+            - name: DATABASE_POOL_MAX
+              value: "10"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              # Parsers hold whole files (video up to 50 MB) in memory.
+              memory: 1536Mi
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

@@ -116,8 +116,11 @@ export function SignInOtpForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Distinct keys: both branches share the same element tree, so without
+            them React reuses the email FormField for "otp" and its Controller
+            stays bound to emailForm — the OTP input then rejects every keystroke. */}
         {step === "email" ? (
-          <Form {...emailForm}>
+          <Form key="email" {...emailForm}>
             <form
               onSubmit={emailForm.handleSubmit(onRequestOtp)}
               className="space-y-4"
@@ -157,7 +160,7 @@ export function SignInOtpForm() {
             </form>
           </Form>
         ) : (
-          <Form {...otpForm}>
+          <Form key="otp" {...otpForm}>
             <form
               onSubmit={otpForm.handleSubmit(onVerifyOtp)}
               className="space-y-4"

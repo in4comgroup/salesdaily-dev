@@ -1,0 +1,23 @@
+# kubectl apply -k deploy/k8s/app
+#
+# Secrets are NOT managed here (never commit them) — create them once by
+# hand, see deploy/k8s/README.md:
+#   ghcr-pull  — docker-registry secret for the private GHCR image
+#   crm-env    — runtime env (keys listed in env.example)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: salesdaily
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - cronjob.yaml
+images:
+  - name: ghcr.io/artuomvproskunin/ru-crm-v1
+    # NOT the source of truth for what runs: the `deploy` workflow
+    # (.github/workflows/deploy.yml) overrides name + tag on its runner and
+    # never commits it. Don't `kubectl apply -k` from a laptop without first
+    # setting this to the tag that is running now — see docs/deploy/ci-deploy.md.
+    newTag: dev-sha-a4aca00
+

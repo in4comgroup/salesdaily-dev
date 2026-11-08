@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import {
   listContacts,
+  listContactsPaged,
+  getContact,
   createContact,
   updateContact,
   listClientOptions,
 } from "@/server/contacts"
+import type { EntityStatus } from "@/db/schema"
 
 export { type ContactRow, type ClientOption } from "@/server/contacts"
 
@@ -24,18 +27,33 @@ export async function GET(request: NextRequest) {
       const options = await listClientOptions()
       return NextResponse.json({ options })
     }
-    const contacts = await listContacts()
-    // ?id= → single contact for the AI-chat result card's detail panel.
-    // listContacts() is already org-scoped, so filtering it can't leak
-    // cross-tenant rows.
     const id = searchParams.get("id")
     if (id) {
-      const contact = contacts.find((c) => c.id === id)
+      const contact = await getContact(id)
       if (!contact) {
         return NextResponse.json({ error: "Contact not found" }, { status: 404 })
       }
       return NextResponse.json({ contact })
     }
+    // Standalone «Контакты» page: server-paginated, alphabetical listing.
+    const hasFeedParams = ["q", "status", "clientId", "limit", "offset"].some(
+      (k) => searchParams.has(k),
+    )
+    if (hasFeedParams) {
+      const result = await listContactsPaged({
+        q: searchParams.get("q") ?? undefined,
+        status: (searchParams.get("status") as EntityStatus | "all" | null) ?? undefined,
+        clientId: searchParams.get("clientId") ?? undefined,
+        limit: searchParams.get("limit")
+          ? Number(searchParams.get("limit"))
+          : undefined,
+        offset: searchParams.get("offset")
+          ? Number(searchParams.get("offset"))
+          : undefined,
+      })
+      return NextResponse.json(result)
+    }
+    const contacts = await listContacts()
     return NextResponse.json({ contacts })
   } catch (error) {
     return errorResponse(error)

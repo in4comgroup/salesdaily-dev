@@ -2,21 +2,21 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Mail, Phone, Briefcase, Building2, Pencil } from "lucide-react"
+import { Mail, Phone, Briefcase, Building2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { ContactRow } from "@/app/api/contacts/route"
-import ContactEditDialog from "@/components/forms/form-contact-edit"
-import { BlacklistEntityButton } from "@/components/blocks/client-blocklist-dialog"
 
-// `initial` is the auto-discovered state — orange accent for review
-// attention. `suspended` stays muted (archived). `deleted` is the soft-
-// delete (excluded from discovery) — red accent + dimmed card. `blocked` is
-// the blocklist suppression. Mirrors the same palette as the client card.
+// `initial` is the auto-discovered state — accent for review attention.
+// `suspended` stays muted (archived). `deleted` is the soft-delete (excluded
+// from discovery) — red accent + dimmed card. `blocked` is the blocklist
+// suppression. Mirrors the same palette as the client card — hues from the
+// deals board (src/lib/deal-board.ts + deal-kanban-card.tsx), not ad-hoc
+// Tailwind colors.
 const STATUS_COLOR: Record<string, string> = {
-  initial: "bg-orange-500/15 text-orange-600 dark:text-orange-300",
+  initial: "bg-[#C2410C]/15 text-[#C2410C] dark:text-[#E5824A]",
   suspended: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
-  deleted: "bg-red-500/15 text-red-600 dark:text-red-400",
-  blocked: "bg-rose-600/15 text-rose-700 dark:text-rose-300",
+  deleted: "bg-red-500/15 text-red-600 dark:text-red-300",
+  blocked: "bg-[#C1121F]/10 text-[#A31018] dark:bg-[#C1121F]/15 dark:text-[#FF8F96]",
 }
 
 // UI display labels for the status badge (DB enum values stay English).
@@ -28,25 +28,27 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: "Заблокирован",
 }
 
+// Клик по всей карточке открывает <ContactDetailDrawer> — как у <ClientCard>,
+// поэтому отдельной кнопки редактирования на карточке больше нет (звонок
+// 18.09 + правки после него).
 export function ContactCard({
   contact,
-  onChanged,
-  canBlock = false,
+  onOpenDetail,
 }: {
   contact: ContactRow
-  onChanged: () => void
-  // When true (owner), show the "add to blocklist" action.
-  canBlock?: boolean
+  onOpenDetail: (contactId: string) => void
 }) {
   return (
     <Card
-      className={`flex flex-col dark:border-gray-600 ${
-        contact.status === "deleted" || contact.status === "blocked"
-          ? "opacity-60"
-          : ""
-      }`}
+      onClick={() => onOpenDetail(contact.id)}
+      className={cn(
+        // Тот же белый фон, что у карточек сделок — единый язык карточек.
+        "flex flex-col cursor-pointer bg-card border-border shadow-sm transition-[box-shadow,background-color] duration-200 hover:shadow-lg hover:bg-card dark:hover:bg-secondary",
+        (contact.status === "deleted" || contact.status === "blocked") &&
+          "opacity-60",
+      )}
     >
-      <CardHeader className="flex flex-row items-start justify-between gap-2">
+      <CardHeader>
         <div className="min-w-0 flex-1">
           <CardTitle className="truncate">
             {contact.nameNative || contact.name}
@@ -70,26 +72,6 @@ export function ContactCard({
                 {STATUS_LABEL[contact.status] ?? contact.status}
               </Badge>
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <ContactEditDialog
-            mode="edit"
-            contact={contact}
-            onSuccess={onChanged}
-            trigger={
-              <Button variant="ghost" size="icon" aria-label="Редактировать контакт">
-                <Pencil className="h-4 w-4" />
-              </Button>
-            }
-          />
-          {canBlock && contact.status !== "blocked" && (
-            <BlacklistEntityButton
-              entityType="contact"
-              id={contact.id}
-              name={contact.nameNative || contact.name}
-              onBlocked={onChanged}
-            />
           )}
         </div>
       </CardHeader>

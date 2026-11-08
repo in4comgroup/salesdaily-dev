@@ -1,0 +1,29 @@
+# Keep the build context small and secret-free.
+.git
+.github
+.idea
+.vscode
+.next
+node_modules
+coverage
+*.log
+.DS_Store
+._*
+
+# Secrets / local env — never baked into an image
+.env*
+*.pem
+config.yaml
+*.kubeconfig
+
+# Local-only material
+docs
+refs
+scripts
+data_migration
+WhatsAppChatHistory
+*.dump
+counts-*.txt
+deploy
+Dockerfile
+.dockerignore

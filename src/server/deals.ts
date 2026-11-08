@@ -3,17 +3,21 @@
 import { db } from "@/db/drizzle"
 import {
   deal,
+  dealActivity,
   dealContact,
   dealFunnelStage,
   client,
   contact,
   user,
   dealStatus,
+  dealContactRole,
   type DealStatus,
+  type DealContactRole,
 } from "@/db/schema"
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
+import { aliasedTable, and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 import { getServerSession } from "@/lib/get-session"
 import { randomUUID } from "crypto"
+import { dealStageLabel } from "@/lib/deal-funnel"
 
 export type DealContactSummary = { id: string; name: string }
 
@@ -23,6 +27,9 @@ export type DealRow = {
   description: string | null
   reasoning: string | null
   changes: string | null
+  // Who performed the last funnel-stage move: 'agent' | 'user'; null = never
+  // moved since the column landed. Drives the «перевёл агент» kanban badge.
+  lastMovedBy: string | null
   funnelStageId: string
   funnelStageName: string
   funnelStageProbability: number
@@ -42,7 +49,7 @@ export type DealRow = {
   updatedAt: string
 }
 
-export type DealClientOption = { id: string; name: string }
+export type DealClientOption = { id: string; name: string; currency: string }
 export type DealContactOption = {
   id: string
   name: string
@@ -132,14 +139,6 @@ async function assertContactsInOrg(
   }
 }
 
-function normaliseCurrency(input: string | undefined | null): string {
-  const raw = (input ?? "USD").trim().toUpperCase()
-  if (!/^[A-Z]{3}$/.test(raw)) {
-    throw new Error("Currency must be a 3-letter ISO code")
-  }
-  return raw
-}
-
 // Drizzle's `numeric` accepts string or number; we normalise to a fixed
 // 2-decimal string so the column store is consistent regardless of how the
 // caller framed the input (form string vs. parsed number).
@@ -225,7 +224,7 @@ export async function listDealFunnelStages(): Promise<DealFunnelStageOption[]> {
 export async function listDealClientOptions(): Promise<DealClientOption[]> {
   const { activeOrgId } = await requireOrgContext()
   const rows = await db
-    .select({ id: client.id, name: client.name })
+    .select({ id: client.id, name: client.name, currency: client.currency })
     .from(client)
     .where(
       and(
@@ -323,6 +322,7 @@ export async function listDeals(
     description: r.deal.description,
     reasoning: r.deal.reasoning,
     changes: r.deal.changes,
+    lastMovedBy: r.deal.lastMovedBy,
     funnelStageId: r.deal.funnelStageId,
     funnelStageName: r.funnelStageName,
     funnelStageProbability: Number(r.funnelStageProbability),
@@ -375,6 +375,7 @@ export async function getDeal(dealId: string): Promise<DealRow | null> {
     description: r.deal.description,
     reasoning: r.deal.reasoning,
     changes: r.deal.changes,
+    lastMovedBy: r.deal.lastMovedBy,
     funnelStageId: r.deal.funnelStageId,
     funnelStageName: r.funnelStageName,
     funnelStageProbability: Number(r.funnelStageProbability),
@@ -400,7 +401,6 @@ export async function createDeal(data: {
   clientId: string
   contactIds?: string[]
   value?: number | string | null
-  currency?: string | null
 }) {
   const { session, activeOrgId } = await requireOrgContext()
   if (!data.name?.trim()) throw new Error("Name is required")
@@ -413,7 +413,12 @@ export async function createDeal(data: {
   await assertContactsInOrg(contactIds, activeOrgId)
 
   const value = normaliseValue(data.value)
-  const currency = normaliseCurrency(data.currency)
+  const clientRow = await db
+    .select({ currency: client.currency })
+    .from(client)
+    .where(eq(client.id, data.clientId))
+    .limit(1)
+  const currency = clientRow[0]?.currency ?? "RUB"
 
   const id = randomUUID()
   const now = new Date()
@@ -443,6 +448,16 @@ export async function createDeal(data: {
         })),
       )
   }
+
+  await db.insert(dealActivity).values({
+    id: randomUUID(),
+    dealId: id,
+    actor: "user",
+    actorUserId: session.user.id,
+    fromStageId: null,
+    toStageId: data.funnelStageId,
+    createdAt: now,
+  })
 
   return { id }
 }
@@ -484,8 +499,15 @@ export async function updateDeal(
   if (data.funnelStageId !== undefined) patch.funnelStageId = data.funnelStageId
   if (data.clientId !== undefined) patch.clientId = data.clientId
   if (data.value !== undefined) patch.value = normaliseValue(data.value)
-  if (data.currency !== undefined) {
-    patch.currency = normaliseCurrency(data.currency)
+  // Валюта сделки всегда равна валюте её клиента: при смене клиента
+  // пересчитываем, присланное data.currency игнорируем (инвариант).
+  if (data.clientId !== undefined) {
+    const clientRow = await db
+      .select({ currency: client.currency })
+      .from(client)
+      .where(eq(client.id, data.clientId))
+      .limit(1)
+    patch.currency = clientRow[0]?.currency ?? "RUB"
   }
   if (data.status !== undefined) {
     if (!dealStatus.enumValues.includes(data.status)) {
@@ -499,14 +521,24 @@ export async function updateDeal(
   }
 
   // Replace-style contact membership update: delete the existing edges,
-  // insert the new set. Simpler than diffing; the cardinality here is small.
+  // insert the new set. Сохраняем назначенные роли существующих связей, чтобы
+  // редактирование сделки не обнуляло роли контактов.
   if (data.contactIds !== undefined) {
+    const existing = await db
+      .select({ contactId: dealContact.contactId, role: dealContact.role })
+      .from(dealContact)
+      .where(eq(dealContact.dealId, dealId))
+    const roleByContact = new Map(existing.map((e) => [e.contactId, e.role]))
     await db.delete(dealContact).where(eq(dealContact.dealId, dealId))
     const unique = Array.from(new Set(data.contactIds))
     if (unique.length > 0) {
-      await db
-        .insert(dealContact)
-        .values(unique.map((contactId) => ({ dealId, contactId })))
+      await db.insert(dealContact).values(
+        unique.map((contactId) => ({
+          dealId,
+          contactId,
+          role: roleByContact.get(contactId) ?? null,
+        })),
+      )
     }
   }
 }
@@ -520,6 +552,302 @@ export async function setDealStatus(dealId: string, status: DealStatus) {
   }
   await assertDealInOrg(dealId, activeOrgId)
   await db.update(deal).set({ status }).where(eq(deal.id, dealId))
+}
+
+// Перевод сделки по воронке вручную (drag&drop в канбане / кросс-стадийный
+// перевод через диалог). Ставит стадию, пишет заметку-основание в `changes`
+// (provenance ручного перевода). `reasoning` не трогаем — оно за discovery-
+// агентом. Опционально ставит `position` (append в целевую колонку) — при
+// кросс-стадийном переводе с заметкой, чтобы порядок внутри стадии остался
+// консистентным.
+export async function moveDealStage(
+  dealId: string,
+  funnelStageId: string,
+  note: string | null,
+  opts?: {
+    position?: string | null
+    actor?: "agent" | "user"
+    // Текст события для журнала (deal_activity), если отличается от `note`
+    // (карточечное поле deal.changes). Сегодня используется только обратным
+    // переводом: карточке — дежурная запись «Переведено: X» (не путать с
+    // реальным изменением состояния), а в журнал ВСЕГДА идёт настоящая
+    // причина. По умолчанию совпадает с `note`.
+    historyNote?: string | null
+    reasoning?: string | null
+  },
+) {
+  const { session, activeOrgId } = await requireOrgContext()
+  await assertDealInOrg(dealId, activeOrgId)
+  await assertFunnelStageAccessible(funnelStageId, activeOrgId)
+
+  const before = await db
+    .select({ funnelStageId: deal.funnelStageId })
+    .from(deal)
+    .where(eq(deal.id, dealId))
+    .limit(1)
+  const fromStageId = before[0]?.funnelStageId ?? null
+
+  const trimmed = note?.trim()
+  const position = opts?.position
+  const actor = opts?.actor ?? "user"
+  // Всегда переписываем `changes` (заметка или null), чтобы при переводе без
+  // заметки в provenance не оставался устаревший текст прошлого изменения.
+  // `lastMovedBy` помечает автора перевода: 'agent' (авто-применённое
+  // предложение) или 'user' (диалог переноса) — питает бейдж «перевёл агент».
+  // `updatedAt` обновляется автоматически через $onUpdate в схеме.
+  await db
+    .update(deal)
+    .set({
+      funnelStageId,
+      changes: trimmed || null,
+      lastMovedBy: actor,
+      ...(typeof position === "string" && position.length > 0
+        ? { position }
+        : {}),
+    })
+    .where(eq(deal.id, dealId))
+
+  // Журнал (deal_activity) — ПОЛНАЯ история, отдельно от карточечного
+  // deal.changes: пишется на КАЖДЫЙ перевод, никогда не перезаписывается.
+  const historyTrimmed = (opts?.historyNote ?? note)?.trim()
+  await db.insert(dealActivity).values({
+    id: randomUUID(),
+    dealId,
+    actor,
+    actorUserId: actor === "agent" ? null : session.user.id,
+    fromStageId,
+    toStageId: funnelStageId,
+    note: historyTrimmed || null,
+    reasoning: opts?.reasoning ?? null,
+  })
+}
+
+export type DealContactWithRole = {
+  id: string
+  name: string
+  nameNative: string | null
+  position: string | null
+  email: string | null
+  role: DealContactRole | null
+}
+
+export async function listDealContactsWithRoles(
+  dealId: string,
+): Promise<DealContactWithRole[]> {
+  const { activeOrgId } = await requireOrgContext()
+  await assertDealInOrg(dealId, activeOrgId)
+  const rows = await db
+    .select({
+      id: contact.id,
+      name: contact.name,
+      nameNative: contact.nameNative,
+      position: contact.position,
+      email: contact.email,
+      role: dealContact.role,
+    })
+    .from(dealContact)
+    .innerJoin(contact, eq(dealContact.contactId, contact.id))
+    .where(eq(dealContact.dealId, dealId))
+  return rows
+}
+
+export async function addDealContact(dealId: string, contactId: string) {
+  const { activeOrgId } = await requireOrgContext()
+  await assertDealInOrg(dealId, activeOrgId)
+  await assertContactsInOrg([contactId], activeOrgId)
+  await db
+    .insert(dealContact)
+    .values({ dealId, contactId })
+    .onConflictDoNothing()
+}
+
+export async function setDealContactRole(
+  dealId: string,
+  contactId: string,
+  role: DealContactRole | null,
+) {
+  const { activeOrgId } = await requireOrgContext()
+  await assertDealInOrg(dealId, activeOrgId)
+  if (role !== null && !dealContactRole.enumValues.includes(role)) {
+    throw new Error("Invalid contact role")
+  }
+  await db
+    .update(dealContact)
+    .set({ role })
+    .where(
+      and(
+        eq(dealContact.dealId, dealId),
+        eq(dealContact.contactId, contactId),
+      ),
+    )
+}
+
+export async function removeDealContact(dealId: string, contactId: string) {
+  const { activeOrgId } = await requireOrgContext()
+  await assertDealInOrg(dealId, activeOrgId)
+  await db
+    .delete(dealContact)
+    .where(
+      and(
+        eq(dealContact.dealId, dealId),
+        eq(dealContact.contactId, contactId),
+      ),
+    )
+}
+
+export type DealActivityRow = {
+  id: string
+  actor: "agent" | "user"
+  actorUserName: string | null
+  fromStageName: string | null
+  toStageName: string | null
+  note: string | null
+  reasoning: string | null
+  createdAt: string
+}
+
+// Полная хронология ОДНОЙ сделки (drawer, вкладка «Хронология») — читает
+// deal_activity, а не deal.changes (которое переписывается на каждый перевод).
+export async function listDealActivity(
+  dealId: string,
+): Promise<DealActivityRow[]> {
+  const { activeOrgId } = await requireOrgContext()
+  await assertDealInOrg(dealId, activeOrgId)
+
+  const fromStage = aliasedTable(dealFunnelStage, "from_stage")
+  const toStage = aliasedTable(dealFunnelStage, "to_stage")
+
+  const rows = await db
+    .select({
+      id: dealActivity.id,
+      actor: dealActivity.actor,
+      actorUserName: user.name,
+      fromStageName: fromStage.name,
+      toStageName: toStage.name,
+      note: dealActivity.note,
+      reasoning: dealActivity.reasoning,
+      createdAt: dealActivity.createdAt,
+    })
+    .from(dealActivity)
+    .leftJoin(user, eq(dealActivity.actorUserId, user.id))
+    .leftJoin(fromStage, eq(dealActivity.fromStageId, fromStage.id))
+    .leftJoin(toStage, eq(dealActivity.toStageId, toStage.id))
+    .where(eq(dealActivity.dealId, dealId))
+    .orderBy(desc(dealActivity.createdAt))
+
+  return rows.map((r) => ({
+    ...r,
+    actor: r.actor as "agent" | "user",
+    createdAt: r.createdAt.toISOString(),
+  }))
+}
+
+// Форма события для «Ленты решений» (top bar) — тот же контракт, что раньше
+// отдавал мок buildFeed (src/server/deals-mock.ts), поэтому клиентский
+// deal-decision-feed.tsx не пришлось менять. `{deal}` в тексте — плейсхолдер,
+// UI подставляет вместо него жирное имя сделки.
+export type FeedEvent = {
+  id: string
+  actor: string
+  isAI: boolean
+  at: string
+  text: string
+  dealName: string | null
+}
+
+// Последние события по ВСЕЙ орге (не одной сделке) — реальный журнал вместо
+// deal.changes-сида + in-memory аппендов агента (deals-mock.ts, TODO(backend),
+// теперь устарело: каждый moveDealStage/createDeal сам пишет в deal_activity).
+export async function listRecentDealActivity(
+  organizationId: string,
+  limit = 100,
+): Promise<FeedEvent[]> {
+  const fromStage = aliasedTable(dealFunnelStage, "from_stage")
+  const toStage = aliasedTable(dealFunnelStage, "to_stage")
+
+  const rows = await db
+    .select({
+      id: dealActivity.id,
+      actor: dealActivity.actor,
+      actorUserName: user.name,
+      dealName: deal.name,
+      clientName: client.name,
+      fromStageName: fromStage.name,
+      toStageName: toStage.name,
+      note: dealActivity.note,
+      reasoning: dealActivity.reasoning,
+      createdAt: dealActivity.createdAt,
+    })
+    .from(dealActivity)
+    .innerJoin(deal, eq(dealActivity.dealId, deal.id))
+    .leftJoin(client, eq(deal.clientId, client.id))
+    .leftJoin(user, eq(dealActivity.actorUserId, user.id))
+    .leftJoin(fromStage, eq(dealActivity.fromStageId, fromStage.id))
+    .leftJoin(toStage, eq(dealActivity.toStageId, toStage.id))
+    .where(eq(deal.organizationId, organizationId))
+    .orderBy(desc(dealActivity.createdAt))
+    .limit(limit)
+
+  return rows.map((r) => {
+    const isAI = r.actor === "agent"
+    const dealName = r.clientName ? `${r.clientName} — ${r.dealName}` : r.dealName
+    const move = r.fromStageName
+      ? `${dealStageLabel(r.fromStageName)} → ${dealStageLabel(r.toStageName ?? "")}`
+      : "Сделка создана"
+    const parts = [move]
+    if (r.note) parts.push(r.note)
+    if (isAI && r.reasoning) parts.push(r.reasoning)
+    return {
+      id: r.id,
+      actor: isAI ? "Агент" : (r.actorUserName ?? "Пользователь"),
+      isAI,
+      at: r.createdAt.toISOString(),
+      text: "{deal}: " + parts.join(" — ") + ".",
+      dealName,
+    }
+  })
+}
+
+// «Не состоялись» по своим колонкам (доска): активная Rejected-сделка не
+// хранит, с какого этапа её отклонили — funnel_stage_id указывает на сам
+// Rejected. Источник — журнал deal_activity: последняя запись, где
+// to_stage_id = Rejected, её from_stage_id и есть исходный этап. Для сделок,
+// отклонённых ДО появления журнала (бэкфилл без истории — see
+// scripts/add-deal-activity.ts), fromStageId может отсутствовать — таких
+// в возвращаемой карте просто нет, вызывающая сторона (deals-board.tsx)
+// откатывается на fallback-показ в колонке «Закрытие».
+// (Отменённые (`cancelled`) сделки сюда не входят — их funnelStageId сам по
+// себе уже корректный «этап, на котором отменили», т.к. setDealStatus()
+// его не трогает — доп. запрос не нужен.)
+export async function listRejectedDealOrigins(): Promise<
+  Record<string, string>
+> {
+  const { activeOrgId } = await requireOrgContext()
+  const stages = await listDealFunnelStages()
+  const rejected = stages.find((s) => s.name === "Rejected")
+  if (!rejected) return {}
+
+  const rows = await db
+    .select({
+      dealId: dealActivity.dealId,
+      fromStageId: dealActivity.fromStageId,
+      createdAt: dealActivity.createdAt,
+    })
+    .from(dealActivity)
+    .innerJoin(deal, eq(dealActivity.dealId, deal.id))
+    .where(
+      and(
+        eq(deal.organizationId, activeOrgId),
+        eq(dealActivity.toStageId, rejected.id),
+      ),
+    )
+    .orderBy(desc(dealActivity.createdAt))
+
+  const result: Record<string, string> = {}
+  for (const r of rows) {
+    if (!result[r.dealId] && r.fromStageId) result[r.dealId] = r.fromStageId
+  }
+  return result
 }
 
 // Kanban drag: move a deal to a column (funnel stage) at a manual-order slot.
@@ -538,9 +866,14 @@ export async function moveDeal(
   if (typeof data.position !== "string" || data.position.length === 0) {
     throw new Error("Invalid position")
   }
+  // Drag — всегда действие человека: сбрасывает метку агентского перевода
+  // (после ручного переноса агент снова вправе сделать один шаг по сделке).
   await db
     .update(deal)
-    .set({ funnelStageId: data.funnelStageId, position: data.position })
+    .set({
+      funnelStageId: data.funnelStageId,
+      position: data.position,
+      lastMovedBy: "user",
+    })
     .where(eq(deal.id, dealId))
 }
-

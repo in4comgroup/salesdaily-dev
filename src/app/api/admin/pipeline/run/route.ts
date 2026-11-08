@@ -2,13 +2,14 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "@/lib/get-session"
 import { runDailyPipeline } from "@/server/orchestration/daily-pipeline"
 
-// Admin "Run pipeline now" — same orchestration the cron-fired workflow
-// uses, just synchronous and HTTP-triggered. Useful for testing the
-// full sync → parse → upload chain without waiting for 03:00 UTC.
+// Admin "Run pipeline now" — same orchestration the cron route
+// (`/api/cron/daily`) runs, just HTTP-triggered from the UI. Useful for
+// testing the full sync → parse → upload chain without waiting for
+// 03:00 UTC.
 //
 // maxDuration is generous because phase 2 (parse) can chew through up
-// to `maxParsePerRun` items, some of which are videos. In practice the
-// workflow path should be preferred for any large run.
+// to `maxParsePerRun` items, some of which are videos. Going through the
+// public ingress, the proxy timeout must be raised to match (Helm chart).
 export const maxDuration = 300
 
 export async function POST() {

@@ -14,10 +14,10 @@ import type { RuleRow } from "@/app/api/rules/route"
 //     periodCutoff("last_day"); see rolling24hCutoffIso below)
 //   • sources → all organization sources (sourceIds: null)
 //   • rule    → "Cards pop-up rule — Telegram orders" (resolved by name)
-//   • model   → Gemini 2.5 Flash (DEFAULT_MODEL_KEY)
+//   • model   → the default gateway model (DEFAULT_MODEL_KEY)
 //   • already-analyzed items are skipped (the default)
 const MAGIC_RULE_NAME = "Cards pop-up rule — Telegram orders"
-const MAGIC_MODEL_KEY = DEFAULT_MODEL_KEY // "gemini-2.5-flash"
+const MAGIC_MODEL_KEY = DEFAULT_MODEL_KEY
 
 // Russian plural picker: forms = [one, few, many] (1 / 2–4 / 0,5–20).
 function plural(n: number, forms: [string, string, string]): string {
@@ -119,7 +119,12 @@ export function MagicCardsButton({
   }
 
   return (
-    <Button size="sm" onClick={handleClick} disabled={running}>
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={handleClick}
+      disabled={running}
+    >
       {running ? (
         <>
           <Loader className="h-4 w-4 mr-1 animate-spin" />
