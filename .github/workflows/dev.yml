@@ -1,14 +1,16 @@
-# Build the Next.js standalone image, push it to GHCR and (optionally) deploy
-# it to the dev cluster (h3llo, dev.salesdaily.ru).
+# Build the Next.js standalone image, push it to GHCR and deploy it to the
+# dev cluster (h3llo, dev.salesdaily.ru).
 #
-# Triggers:
-#   push to main        → build only (image is pushed, nothing is deployed)
-#   Run workflow (UI)   → pick the branch, then tick what to do:
-#                           build=true,  deploy=true   → build this branch and deploy it
-#                           build=true,  deploy=false  → just build
-#                           build=false, deploy=true   → deploy an existing image
-#                                                        (tag empty = dev-sha-<commit>,
-#                                                         past tag = rollback)
+# Push to main:
+#   build runs automatically and pushes the image. Nothing is deployed.
+#
+# Deploy = Actions → build-and-deploy → Run workflow:
+#   • release engineer, image already built (main): just press the green
+#     "Run workflow" button — defaults are build=off, deploy=on, tag empty,
+#     and it deploys the image built from the latest commit of the branch;
+#   • new branch, nothing built yet: tick build as well → build, then deploy;
+#   • rollback: build=off, deploy=on, tag=<past tag>;
+#   • only build a branch: build=on, deploy=off.
 #
 # Tags pushed by the build:
 #   ghcr.io/<owner>/<repo>:dev-sha-<short>  — every build (immutable; deploy THIS)
@@ -42,15 +44,15 @@ on:
   workflow_dispatch:
     inputs:
       build:
-        description: "Build and push the image for the selected branch"
+        description: "Build and push the image for the selected branch (needed for a branch that has no image yet)"
         type: boolean
-        default: true
+        default: false
       deploy:
         description: "Deploy to dev (manifests from the selected branch)"
         type: boolean
-        default: false
+        default: true
       tag:
-        description: "Deploy only: image tag (empty = dev-sha-<commit of the selected branch>). Wins over the fresh build."
+        description: "Image tag to deploy (empty = dev-sha-<commit of the selected branch>; a past tag = rollback)"
         type: string
         required: false
         default: ""
@@ -124,13 +126,11 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    # Never on push — only when explicitly requested, and only if the build
-    # (when it was requested) succeeded. A skipped build is fine (rollback /
-    # redeploy of an existing image).
+    # Manual runs only. A skipped build is fine (image already exists /
+    # rollback); a failed or cancelled one blocks the deploy.
     needs: build
     if: >-
-      !cancelled() &&
-      github.event_name == 'workflow_dispatch' && inputs.deploy &&
+      !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -165,7 +165,7 @@ jobs:
       - name: Check the image exists
         run: |
           if ! docker buildx imagetools inspect "${{ steps.image.outputs.ref }}" > /dev/null; then
-            echo "::error::Image ${{ steps.image.outputs.ref }} not found — run this workflow with build=true for this branch first"
+            echo "::error::Image ${{ steps.image.outputs.ref }} not found — run this workflow with build=on for this branch first"
             exit 1
           fi
 
