@@ -10,12 +10,19 @@ import {
   contact,
   member,
   rule,
+  source,
   sourceItem,
   user,
   type CardPriority,
   type CardCategory,
 } from "@/db/schema"
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, notInArray } from "drizzle-orm"
+import {
+  domainMatches,
+  extractEmailDomain,
+  extractWebsiteDomain,
+  isFreemailDomain,
+} from "@/lib/email-domain"
 import { getServerSession } from "@/lib/get-session"
 import { randomUUID } from "crypto"
 
@@ -48,15 +55,110 @@ export type CardRow = {
   message: CardMessage
   accepted: boolean
   rejectionReason: string | null
+  // What accepting this card actually created — set by acceptCard() when the
+  // caller passes resultTaskId/resultOrderId. At most one is ever non-null.
+  resultTaskId: string | null
+  resultOrderId: string | null
   sourceItemId: string | null
+  // Human-readable description of the source the card was built from: email
+  // subject / first line of a chat message / file name. Never the provider's
+  // opaque external id (that read as a meaningless hash on the card).
   sourceItemTitle: string | null
+  sourceProvider: string | null
+  sourceSender: string | null
+  // Email To + Cc, formatted for display (null for chats/files).
+  sourceRecipients: string | null
+  sourceCreatedAt: string | null
   ruleId: string | null
   ruleName: string | null
   clients: CardClientRef[]
   users: CardUserRef[]
   contacts: CardContactRef[]
+  // Компания, о которой карточка — крупно в заголовке на Домашней. LLM
+  // привязывает card_client далеко не всегда, поэтому резолвится цепочкой
+  // (см. resolveCardCompanies); null — компанию определить не удалось.
+  company: CardClientRef | null
   createdAt: string
   updatedAt: string
+}
+
+// Raw join columns describing a card's source item (see sourceSummary).
+type SourceJoin = {
+  sourceItemFilename: string | null
+  sourceItemMetadata: unknown
+  sourceItemCreatedAt: Date | null
+  sourceProvider: string | null
+}
+
+const SOURCE_SELECT = {
+  sourceItemFilename: sourceItem.filename,
+  sourceItemMetadata: sourceItem.metadataJson,
+  sourceItemCreatedAt: sourceItem.sourceCreatedAt,
+  sourceProvider: source.provider,
+}
+
+function firstLine(text: unknown, max = 120): string | null {
+  if (typeof text !== "string") return null
+  const line = text
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0)
+  if (!line) return null
+  return line.length > max ? line.slice(0, max - 1) + "…" : line
+}
+
+function formatParty(p: unknown): string | null {
+  const f = p as { name?: unknown; email?: unknown }
+  const name = typeof f?.name === "string" ? f.name.trim() : ""
+  const email = typeof f?.email === "string" ? f.email.trim() : ""
+  if (name && email) return `${name} <${email}>`
+  return name || email || null
+}
+
+function formatParties(list: unknown): string[] {
+  if (!Array.isArray(list)) return []
+  return list.map(formatParty).filter((p): p is string => !!p)
+}
+
+function firstSender(meta: Record<string, unknown>): string | null {
+  const from = formatParties(meta.from)
+  if (from.length > 0) return from[0]
+  const senders = meta.senders
+  if (Array.isArray(senders) && typeof senders[0] === "string") {
+    return senders[0].trim() || null
+  }
+  return null
+}
+
+// Turns the joined source columns into what the card shows: a title the
+// operator recognises (subject / message preview / file name), the sender and
+// the original date. The opaque external id is deliberately never used.
+function sourceSummary(r: SourceJoin) {
+  const meta =
+    r.sourceItemMetadata && typeof r.sourceItemMetadata === "object"
+      ? (r.sourceItemMetadata as Record<string, unknown>)
+      : {}
+  const subject =
+    typeof meta.subject === "string" && meta.subject.trim()
+      ? meta.subject.trim()
+      : null
+  const title =
+    subject ??
+    firstLine(meta.text) ??
+    firstLine(meta.rawText) ??
+    r.sourceItemFilename ??
+    firstLine(meta.summary)
+  return {
+    sourceItemTitle: title,
+    sourceProvider: r.sourceProvider,
+    sourceSender: firstSender(meta),
+    sourceRecipients:
+      [...formatParties(meta.to), ...formatParties(meta.cc)].join(", ") ||
+      null,
+    sourceCreatedAt: r.sourceItemCreatedAt
+      ? r.sourceItemCreatedAt.toISOString()
+      : null,
+  }
 }
 
 async function requireOrgContext() {
@@ -176,6 +278,113 @@ function normaliseMessage(raw: unknown): CardMessage {
   }
 }
 
+// Email внешнего отправителя исходника: envelope `from` (почта), иначе
+// канонические `participants` (gchat/gdrive). Telegram/файлы → null.
+function senderEmailOf(meta: unknown): string | null {
+  if (!meta || typeof meta !== "object") return null
+  const m = meta as Record<string, unknown>
+  for (const list of [m.from, m.participants]) {
+    if (!Array.isArray(list)) continue
+    for (const p of list) {
+      const e = (p as { email?: unknown })?.email
+      if (typeof e === "string" && e.includes("@")) return e.trim().toLowerCase()
+    }
+  }
+  return null
+}
+
+type CompanyInput = {
+  cardId: string
+  clients: CardClientRef[]
+  contacts: CardContactRef[]
+  senderEmail: string | null
+}
+
+// Компания карточки, по убыванию надёжности:
+//   1. card_client (LLM сопоставил с ростером);
+//   2. компания привязанного контакта (card_contact → contact.client_id);
+//   3. контакт с email отправителя → его компания;
+//   4. домен отправителя (не freemail) ↔ сайт или email-домен компании.
+// Ни ФИО контакта, ни другие догадки сюда не идут: лучше пусто, чем
+// человек вместо компании (звонок 26.10).
+async function resolveCardCompanies(
+  organizationId: string,
+  inputs: CompanyInput[],
+): Promise<Map<string, CardClientRef | null>> {
+  const out = new Map<string, CardClientRef | null>()
+  const needLookup = inputs.some((i) => i.clients.length === 0)
+  const [orgClients, orgContacts] = needLookup
+    ? await Promise.all([
+        db
+          .select({
+            id: client.id,
+            name: client.name,
+            webUrl: client.webUrl,
+            email: client.email,
+          })
+          .from(client)
+          .where(
+            and(
+              eq(client.organizationId, organizationId),
+              notInArray(client.status, ["deleted", "blocked"]),
+            ),
+          ),
+        db
+          .select({ email: contact.email, clientId: contact.clientId })
+          .from(contact)
+          .where(
+            and(
+              eq(contact.organizationId, organizationId),
+              notInArray(contact.status, ["deleted", "blocked"]),
+            ),
+          ),
+      ])
+    : [[], []]
+
+  const clientById = new Map(orgClients.map((c) => [c.id, c]))
+  const clientIdByContactEmail = new Map<string, string>()
+  for (const c of orgContacts) {
+    if (c.email && c.clientId) {
+      clientIdByContactEmail.set(c.email.trim().toLowerCase(), c.clientId)
+    }
+  }
+  const ref = (id: string | null | undefined): CardClientRef | null => {
+    const c = id ? clientById.get(id) : undefined
+    return c ? { id: c.id, name: c.name } : null
+  }
+  const byDomain = (domain: string): CardClientRef | null => {
+    if (!domain || isFreemailDomain(domain)) return null
+    for (const c of orgClients) {
+      const site = c.webUrl ? extractWebsiteDomain(c.webUrl) : ""
+      const mail = c.email ? extractEmailDomain(c.email) : ""
+      if (
+        (site && domainMatches(domain, site)) ||
+        (mail && !isFreemailDomain(mail) && mail === domain)
+      ) {
+        return { id: c.id, name: c.name }
+      }
+    }
+    return null
+  }
+
+  for (const i of inputs) {
+    let company: CardClientRef | null = i.clients[0] ?? null
+    if (!company) {
+      for (const ct of i.contacts) {
+        company = ref(ct.clientId)
+        if (company) break
+      }
+    }
+    if (!company && i.senderEmail) {
+      company =
+        ref(clientIdByContactEmail.get(i.senderEmail)) ??
+        byDomain(extractEmailDomain(i.senderEmail))
+    }
+    out.set(i.cardId, company)
+  }
+  return out
+}
+
 export async function listCards(): Promise<CardRow[]> {
   const { activeOrgId } = await requireOrgContext()
 
@@ -183,12 +392,12 @@ export async function listCards(): Promise<CardRow[]> {
     .select({
       card,
       ruleName: rule.name,
-      sourceItemFilename: sourceItem.filename,
-      sourceItemExternalId: sourceItem.externalId,
+      ...SOURCE_SELECT,
     })
     .from(card)
     .leftJoin(rule, eq(card.ruleId, rule.id))
     .leftJoin(sourceItem, eq(card.sourceItemId, sourceItem.id))
+    .leftJoin(source, eq(sourceItem.sourceId, source.id))
     .where(eq(card.organizationId, activeOrgId))
     .orderBy(desc(card.createdAt))
 
@@ -249,6 +458,16 @@ export async function listCards(): Promise<CardRow[]> {
     contactsByCard.set(l.cardId, arr)
   }
 
+  const companies = await resolveCardCompanies(
+    activeOrgId,
+    cardRows.map((r) => ({
+      cardId: r.card.id,
+      clients: clientsByCard.get(r.card.id) ?? [],
+      contacts: contactsByCard.get(r.card.id) ?? [],
+      senderEmail: senderEmailOf(r.sourceItemMetadata),
+    })),
+  )
+
   return cardRows.map((r) => ({
     id: r.card.id,
     organizationId: r.card.organizationId,
@@ -257,13 +476,16 @@ export async function listCards(): Promise<CardRow[]> {
     message: normaliseMessage(r.card.message),
     accepted: r.card.accepted,
     rejectionReason: r.card.rejectionReason,
+    resultTaskId: r.card.resultTaskId,
+    resultOrderId: r.card.resultOrderId,
     sourceItemId: r.card.sourceItemId,
-    sourceItemTitle: r.sourceItemFilename ?? r.sourceItemExternalId,
+    ...sourceSummary(r),
     ruleId: r.card.ruleId,
     ruleName: r.ruleName,
     clients: clientsByCard.get(r.card.id) ?? [],
     users: usersByCard.get(r.card.id) ?? [],
     contacts: contactsByCard.get(r.card.id) ?? [],
+    company: companies.get(r.card.id) ?? null,
     createdAt: r.card.createdAt.toISOString(),
     updatedAt: r.card.updatedAt.toISOString(),
   }))
@@ -275,12 +497,12 @@ export async function getCard(cardId: string): Promise<CardRow | null> {
     .select({
       card,
       ruleName: rule.name,
-      sourceItemFilename: sourceItem.filename,
-      sourceItemExternalId: sourceItem.externalId,
+      ...SOURCE_SELECT,
     })
     .from(card)
     .leftJoin(rule, eq(card.ruleId, rule.id))
     .leftJoin(sourceItem, eq(card.sourceItemId, sourceItem.id))
+    .leftJoin(source, eq(sourceItem.sourceId, source.id))
     .where(eq(card.id, cardId))
     .limit(1)
   const row = rows[0]
@@ -318,6 +540,27 @@ export async function getCard(cardId: string): Promise<CardRow | null> {
       .where(eq(cardContact.cardId, cardId)),
   ])
 
+  const clients = clientLinks.map((l) => ({
+    id: l.clientId,
+    name: l.clientName,
+  }))
+  const contacts = contactLinks.map((l) => ({
+    id: l.contactId,
+    name: l.contactName,
+    clientId: l.contactClientId,
+  }))
+  const company =
+    (
+      await resolveCardCompanies(activeOrgId, [
+        {
+          cardId,
+          clients,
+          contacts,
+          senderEmail: senderEmailOf(row.sourceItemMetadata),
+        },
+      ])
+    ).get(cardId) ?? null
+
   return {
     id: row.card.id,
     organizationId: row.card.organizationId,
@@ -326,21 +569,20 @@ export async function getCard(cardId: string): Promise<CardRow | null> {
     message: normaliseMessage(row.card.message),
     accepted: row.card.accepted,
     rejectionReason: row.card.rejectionReason,
+    resultTaskId: row.card.resultTaskId,
+    resultOrderId: row.card.resultOrderId,
     sourceItemId: row.card.sourceItemId,
-    sourceItemTitle: row.sourceItemFilename ?? row.sourceItemExternalId,
+    ...sourceSummary(row),
     ruleId: row.card.ruleId,
     ruleName: row.ruleName,
-    clients: clientLinks.map((l) => ({ id: l.clientId, name: l.clientName })),
+    clients,
     users: userLinks.map((l) => ({
       id: l.userId,
       name: l.userName,
       email: l.userEmail,
     })),
-    contacts: contactLinks.map((l) => ({
-      id: l.contactId,
-      name: l.contactName,
-      clientId: l.contactClientId,
-    })),
+    contacts,
+    company,
     createdAt: row.card.createdAt.toISOString(),
     updatedAt: row.card.updatedAt.toISOString(),
   }
@@ -472,12 +714,20 @@ export async function updateCard(
   }
 }
 
-export async function acceptCard(cardId: string) {
+export async function acceptCard(
+  cardId: string,
+  opts?: { resultTaskId?: string; resultOrderId?: string },
+) {
   const { activeOrgId } = await requireOrgContext()
   await assertCardInOrg(cardId, activeOrgId)
   await db
     .update(card)
-    .set({ accepted: true, rejectionReason: null })
+    .set({
+      accepted: true,
+      rejectionReason: null,
+      ...(opts?.resultTaskId ? { resultTaskId: opts.resultTaskId } : {}),
+      ...(opts?.resultOrderId ? { resultOrderId: opts.resultOrderId } : {}),
+    })
     .where(eq(card.id, cardId))
 }
 

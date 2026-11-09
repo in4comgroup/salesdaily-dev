@@ -4,19 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer"
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { SidebarMenuButton } from "@/components/ui/sidebar"
 import { Bell, Building2, User, Handshake, LayoutGrid, Loader } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { groupByDate } from "@/lib/date-groups"
+import { AnchorTooltip, useAnchorTooltip } from "@/components/blocks/anchor-tooltip"
 
 type NotificationEvent = {
   id: string
@@ -106,6 +105,8 @@ export function NotificationsDrawer() {
     return () => clearInterval(t)
   }, [poll])
 
+  const bellTip = useAnchorTooltip()
+
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
     if (next && unreadCount > 0) {
@@ -116,42 +117,53 @@ export function NotificationsDrawer() {
     }
   }
 
+  // Подсказка — тот же AnchorTooltip, что у переключателя темы и вида
+  // «карточки/список», а не системный title: подсказки в продукте одинаковые.
   return (
-    <Drawer open={open} onOpenChange={handleOpenChange}>
-      <DrawerTrigger asChild>
-        {/* SidebarMenuButton с классами ссылок меню — пункт идентичен
-            «Организации»/«Теме»/«Выйти» и сворачивается тем же механизмом. */}
-        <SidebarMenuButton
-          className="flex items-center p-2 rounded-md cursor-pointer text-gray-600 dark:text-white hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:hover:text-sidebar-accent-foreground"
-          onClick={(e) => {
-            e.currentTarget.blur()
-          }}
-        >
-          <span className="relative mr-2 shrink-0">
+    <>
+      <AnchorTooltip
+        text="уведомления"
+        open={bellTip.open && !open}
+        virtualRef={bellTip.virtualRef}
+      />
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetTrigger asChild>
+          {/* Колокольчик в шапке страницы, правее глобального поиска (звонок
+              22.10: внизу сайдбара — административные пункты, а уведомления —
+              смысловые). Ghost-иконка той же высоты, что «ИИ чат» и поиск
+              (size="sm" = h-8). */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Уведомления"
+            className="relative cursor-pointer"
+            {...bellTip.bind}
+            onClick={(e) => {
+              e.currentTarget.blur()
+            }}
+          >
             <Bell className="size-4" />
             {unreadCount > 0 && (
               <span
-                className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#C1121F] px-0.5 text-[9px] font-semibold leading-none text-white"
+                className="absolute top-0.5 right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#C1121F] px-0.5 text-[9px] font-semibold leading-none text-white"
                 aria-label={`${unreadCount} новых событий`}
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
-          </span>
-          {/* Подпись всегда в DOM — в свёрнутом виде её срезает CSS
-              SidebarMenuButton, как у остальных пунктов (см. logout.tsx). */}
-          <span className="text-sm">Уведомления</span>
-        </SidebarMenuButton>
-      </DrawerTrigger>
-      <DrawerContent className="mx-auto w-full max-w-lg">
-        <div className="flex flex-col min-h-0">
-          <DrawerHeader>
-            <DrawerTitle>Уведомления</DrawerTitle>
-            <DrawerDescription>
+          </Button>
+        </SheetTrigger>
+        {/* Правая шторка — тот же язык, что «Лента решений» и дроверы
+            сделки/компании: шапка с чертой, ниже скролл с дата-группами. */}
+        <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+          <SheetHeader className="p-4 pb-3 border-b">
+            <SheetTitle>Уведомления</SheetTitle>
+            <SheetDescription>
               Новые компании, контакты, сделки и карточки в организации.
-            </DrawerDescription>
-          </DrawerHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-2 space-y-1">
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader className="h-4 w-4 animate-spin" />
@@ -162,42 +174,44 @@ export function NotificationsDrawer() {
                 Пока нет уведомлений.
               </p>
             ) : (
-              events.map((e) => {
-                const Icon = TYPE_ICON[e.type]
-                return (
-                  <Link
-                    key={e.id}
-                    href={e.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "flex items-start gap-3 rounded-md p-2.5 text-sm transition-colors",
-                      "hover:bg-accent hover:text-accent-foreground",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{e.title}</div>
-                      {e.subtitle && (
-                        <div className="truncate text-xs text-muted-foreground">
-                          {e.subtitle}
+              groupByDate(events, (e) => e.createdAt).map((group) => (
+                <div key={group.label} className="space-y-2">
+                  <div className="sticky top-0 -mt-1 bg-background/95 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
+                    {group.label}
+                  </div>
+                  {group.items.map((e) => {
+                    const Icon = TYPE_ICON[e.type]
+                    return (
+                      <Link
+                        key={e.id}
+                        href={e.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex items-start gap-3 rounded-lg border bg-muted/30 p-2.5 text-sm transition-colors",
+                          "hover:bg-accent hover:text-accent-foreground",
+                        )}
+                      >
+                        <Icon className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{e.title}</div>
+                          {e.subtitle && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {e.subtitle}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeAgo(e.createdAt)}
-                    </span>
-                  </Link>
-                )
-              })
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {timeAgo(e.createdAt)}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              ))
             )}
           </div>
-          <DrawerFooter className="flex items-center justify-center">
-            <DrawerClose asChild>
-              <Button variant="outline">Закрыть</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </div>
-      </DrawerContent>
-    </Drawer>
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }

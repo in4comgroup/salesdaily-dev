@@ -25,12 +25,12 @@ import {
   gte,
 } from "drizzle-orm"
 import { computeOrderDiscount } from "@/lib/orders-format"
+import { loadClientLastActivity } from "@/server/client-activity"
 import { listDealFunnelStages } from "@/server/deals"
 import {
   listTaskSummaryByClient,
   type ClientTaskSummary,
 } from "@/server/tasks"
-import { clientAtRisk } from "@/lib/client-mocks"
 import { generateText, Output, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
@@ -76,7 +76,15 @@ export type ClientRow = {
   organizationId: string
   createdAt: string
   updatedAt: string
+  // Реальная последняя активность (письма/карточки, задачи, сделки, заказы,
+  // контакты — см. loadClientLastActivity). Заполняется лентой /clients;
+  // где её нет, бейдж «N дн без контакта» откатывается на updatedAt.
+  lastActivityAt?: string
   contacts: ClientContactPreview[]
+}
+
+function maxIso(a: Date, b: Date | undefined): string {
+  return (b && b > a ? b : a).toISOString()
 }
 
 async function requireOrgContext() {
@@ -249,7 +257,8 @@ export async function listClientsFeed(params: {
   taskSummary: Record<string, ClientTaskSummary>
 }> {
   const { activeOrgId } = await requireOrgContext()
-  const limit = Math.min(Math.max(params.limit ?? 20, 1), 50)
+  // До 500 — страница /clients грузит вкладку целиком и сортирует на клиенте.
+  const limit = Math.min(Math.max(params.limit ?? 20, 1), 500)
   const offset = Math.max(params.offset ?? 0, 0)
 
   const stages = await listDealFunnelStages()
@@ -258,7 +267,13 @@ export async function listClientsFeed(params: {
   )
   const openStageIds = new Set(
     stages
-      .filter((s) => s.closureProbability > 0 && s.closureProbability < 1)
+      // «Область 0» (isPrePipeline) — тоже «потенциальный»: целевая компания,
+      // с которой уже ведём отношения, хоть активной возможности ещё нет.
+      .filter(
+        (s) =>
+          s.isPrePipeline ||
+          (s.closureProbability > 0 && s.closureProbability < 1),
+      )
       .map((s) => s.id),
   )
 
@@ -306,16 +321,13 @@ export async function listClientsFeed(params: {
     }
   })
 
-  matching.sort((a, b) => {
-    const overdueA = taskSummary[a.client.id]?.overdueCount ?? 0
-    const overdueB = taskSummary[b.client.id]?.overdueCount ?? 0
-    if (overdueA !== overdueB) return overdueB - overdueA
-    const staleA = clientAtRisk(a.client.updatedAt.toISOString()) ? 1 : 0
-    const staleB = clientAtRisk(b.client.updatedAt.toISOString()) ? 1 : 0
-    if (staleA !== staleB) return staleB - staleA
-    // Final tiebreak: most-recently-touched first (was oldest-first).
-    return b.client.updatedAt.getTime() - a.client.updatedAt.getTime()
-  })
+  // Базовый порядок — по дате добавления, новые наверху. Страница грузит
+  // ленту вкладки целиком (limit до 500) и пересортировывает её сама
+  // (`sortClientFeed` в src/lib/client-feed-sort.ts — там же «Сначала
+  // критичные»), чтобы переключение было мгновенным и с анимацией.
+  matching.sort(
+    (a, b) => b.client.createdAt.getTime() - a.client.createdAt.getTime(),
+  )
 
   const total = matching.length
   const page = matching.slice(offset, offset + limit)
@@ -349,6 +361,8 @@ export async function listClientsFeed(params: {
     contactsByClient.set(c.clientId, list)
   }
 
+  const lastActivity = await loadClientLastActivity(activeOrgId, clientIds)
+
   const pageTaskSummary: Record<string, ClientTaskSummary> = {}
   for (const id of clientIds) {
     if (taskSummary[id]) pageTaskSummary[id] = taskSummary[id]
@@ -376,6 +390,10 @@ export async function listClientsFeed(params: {
       organizationId: r.client.organizationId,
       createdAt: r.client.createdAt.toISOString(),
       updatedAt: r.client.updatedAt.toISOString(),
+      lastActivityAt: maxIso(
+        r.client.updatedAt,
+        lastActivity.get(r.client.id),
+      ),
       contacts: contactsByClient.get(r.client.id) ?? [],
     })),
   }

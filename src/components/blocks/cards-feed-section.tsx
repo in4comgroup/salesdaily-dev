@@ -7,6 +7,7 @@ import { AlertTriangle, Loader, X } from "lucide-react"
 import type { CardRow } from "@/app/api/cards/route"
 import { DashboardCard } from "@/components/blocks/dashboard-card"
 import { useInfiniteScroll } from "@/lib/use-infinite-scroll"
+import { PageLoader } from "@/components/blocks/page-loader"
 
 // Two rows on the lg grid (3 cols) per scroll batch — was one row (3) behind
 // click-through pagination; the team asked for roughly double, scroll-loaded
@@ -15,11 +16,25 @@ import { useInfiniteScroll } from "@/lib/use-infinite-scroll"
 const PAGE_SIZE = 6
 export const ALL = "__all__"
 
+// Та же дефиниция «решённости», что и в dashboard-card.tsx.
+function isResolved(card: CardRow): boolean {
+  return card.accepted || !!card.rejectionReason
+}
+
 export const PRIORITIES = ["normal", "high"] as const
+// Only the 7 categories the org's active Custom rule ("Cards - Email,
+// Telegram and Support") actually defines CASES for — client_activity /
+// colleagues_activity / business_info are valid DB enum values (other,
+// older/inactive rules in this org's /rules list still declare them) but
+// this rule's own # OUTPUT CONTRACT no longer lists them (see
+// scripts/fix-cards-rule-category-enum.ts + src/app/CLAUDE.md § "Card
+// category labels"), so a card can never actually carry one in practice
+// today. Dropped from the filter dropdown so it doesn't offer dead options;
+// CardCategory itself (schema.ts) and every other CATEGORY_LABEL copy
+// (dashboard-card.tsx / card-detail-shell.tsx / notifications.ts) still
+// cover all ten, so a historical/other-rule card in one of the three would
+// still render its title correctly — it just can't be filtered TO here.
 export const CATEGORIES = [
-  "client_activity",
-  "colleagues_activity",
-  "business_info",
   "action_required",
   "ambiguity",
   "data_intelligence",
@@ -30,10 +45,7 @@ export const CATEGORIES = [
 ] as const
 
 export const CATEGORY_LABEL: Record<(typeof CATEGORIES)[number], string> = {
-  client_activity: "Активность клиента",
-  colleagues_activity: "Активность коллег",
-  business_info: "Бизнес-информация",
-  action_required: "Требуется действие",
+  action_required: "Нужен ответ",
   ambiguity: "Неоднозначность",
   data_intelligence: "Аналитика данных",
   momentum: "Динамика",
@@ -54,6 +66,7 @@ export function CardsFeedSection({
   loadError,
   onRetry,
   onChanged,
+  onCreateOrder,
   priority,
   category,
   from,
@@ -68,6 +81,8 @@ export function CardsFeedSection({
   loadError: boolean
   onRetry: () => void
   onChanged: () => void
+  // Threaded straight through to <DashboardCard> — see its own prop comment.
+  onCreateOrder?: (card: CardRow) => void
   // Приоритет/категория/период/отклонённые — все фильтры теперь в шапке
   // страницы (по образцу /clients) — секция только фильтрует и рендерит по
   // уже переданным значениям, селекты/контролы сами живут в page.tsx.
@@ -82,7 +97,7 @@ export function CardsFeedSection({
     const fromTs = from ? new Date(from).getTime() : null
     const toTs = to ? new Date(`${to}T23:59:59.999`).getTime() : null
 
-    return cards.filter((c) => {
+    const matched = cards.filter((c) => {
       // Hide rejected cards unless the toggle includes them. Accepted
       // cards always pass — they remain on the dashboard as a record of
       // approved actions.
@@ -97,6 +112,11 @@ export function CardsFeedSection({
 
       return true
     })
+
+    // Карточки, требующие действия, всегда идут первыми — Array.prototype.sort
+    // стабилен (ES2019+), так что внутри каждой из двух групп порядок не
+    // меняется.
+    return matched.sort((a, b) => Number(isResolved(a)) - Number(isResolved(b)))
   }, [cards, priority, category, from, to, includeRejected])
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -121,9 +141,14 @@ export function CardsFeedSection({
   const grid = useMemo(
     () =>
       visible.map((c) => (
-        <DashboardCard key={c.id} card={c} onChanged={onChanged} />
+        <DashboardCard
+          key={c.id}
+          card={c}
+          onChanged={onChanged}
+          onCreateOrder={onCreateOrder}
+        />
       )),
-    [visible, onChanged],
+    [visible, onChanged, onCreateOrder],
   )
 
   // The default date range is "Все время" (both empty); any deviation
@@ -151,9 +176,7 @@ export function CardsFeedSection({
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none space-y-4">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="animate-spin h-6 w-6" />
-          </div>
+          <PageLoader />
         ) : loadError && cards.length === 0 ? (
           <Card className="border-dashed border-destructive/40 bg-destructive/5">
             <CardHeader className="items-center text-center gap-3">

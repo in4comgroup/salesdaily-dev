@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { PageHeaderActions } from "@/components/blocks/page-header-actions"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
@@ -28,12 +29,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Plus,
-  Sparkles,
   ListTree,
   ChevronsRightLeft,
   ChevronsLeftRight,
   ChevronsUpDown,
+  ScanSearch,
+  SlidersVertical,
 } from "lucide-react"
+import { DealStageSettingsDialog } from "@/components/blocks/deal-stage-settings-dialog"
 import {
   Tooltip,
   TooltipContent,
@@ -46,7 +49,6 @@ import type {
   DealFunnelStageOption,
   DealClientOption,
 } from "@/app/api/deals/route"
-import { dealStageLabel } from "@/lib/deal-funnel"
 import {
   aggregateByCurrency,
   dealAmount,
@@ -65,8 +67,6 @@ import DealEditDialog from "@/components/forms/form-deal-edit"
 import { DiscoverDealsDialog } from "@/components/blocks/discover-deals-dialog"
 import { DealDetailDrawer } from "@/components/blocks/deal-detail-drawer"
 import { DealDecisionFeed } from "@/components/blocks/deal-decision-feed"
-import { GlobalSearch } from "@/components/blocks/global-search"
-import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
 import { useBoardIntel } from "@/hooks/use-board-intel"
 import {
   DealOutcomeDialog,
@@ -79,6 +79,8 @@ import { TerminalColumn, FINAL_DROP_ID } from "./deals-kanban/terminal-column"
 import {
   useBoardStore,
   sortTerminalCards,
+  terminalSortStorageKey,
+  TERMINAL_SORT_MODES,
   type SortMode,
   type TerminalSortMode,
 } from "./deals-kanban/store"
@@ -225,7 +227,31 @@ export function DealsBoard({
   const [pendingOutcome, setPendingOutcome] = useState<PendingOutcome | null>(
     null,
   )
-  const [finalSort, setFinalSort] = useState<TerminalSortMode>("default")
+  const [stageSettingsOpen, setStageSettingsOpen] = useState(false)
+  const [finalSort, setFinalSortState] = useState<TerminalSortMode>("default")
+  // Сортировка финальной колонки переживает уход со страницы — как и
+  // сортировки обычных колонок в store (localStorage, per-user).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(terminalSortStorageKey(currentUserId))
+      if (raw && (TERMINAL_SORT_MODES as string[]).includes(raw)) {
+        setFinalSortState(raw as TerminalSortMode)
+      }
+    } catch {
+      /* ignore disabled storage */
+    }
+  }, [currentUserId])
+  const setFinalSort = useCallback(
+    (mode: TerminalSortMode) => {
+      setFinalSortState(mode)
+      try {
+        localStorage.setItem(terminalSortStorageKey(currentUserId), mode)
+      } catch {
+        /* ignore quota / disabled storage */
+      }
+    },
+    [currentUserId],
+  )
   // Сворачивание финальной колонки (как у обычных, но её нет в store —
   // держим отдельным флагом; учитывается в «Свернуть/Развернуть все»).
   const [finalCollapsed, setFinalCollapsed] = useState(false)
@@ -382,8 +408,10 @@ export function DealsBoard({
     [wonDeals, lostNoOrigin, finalSort],
   )
 
+  // Скрытые в «Настройках стадий» колонки (isHidden) на доску не попадают —
+  // их сделки тоже не показываются (store раскладывает только по переданным).
   const flowStages = useMemo(
-    () => stages.filter((s) => !isTerminalStage(s.name)),
+    () => stages.filter((s) => !isTerminalStage(s.name) && !s.isHidden),
     [stages],
   )
   const terminalStages = stages.filter((s) => isTerminalStage(s.name))
@@ -434,7 +462,7 @@ export function DealsBoard({
 
   const stageLabelOf = (stageId?: string) => {
     const s = stages.find((st) => st.id === stageId)
-    return s ? dealStageLabel(s.name) : null
+    return s ? s.label : null
   }
 
   const announcements: Announcements = {
@@ -499,7 +527,7 @@ export function DealsBoard({
       setPendingOutcome({
         dealId: moving.id,
         dealName: moving.name,
-        fromLabel: dealStageLabel(fromStage?.name ?? ""),
+        fromLabel: fromStage?.label ?? "",
       })
       return
     }
@@ -544,8 +572,8 @@ export function DealsBoard({
       dealId: moving.id,
       dealName: moving.name,
       toStageId: toStage.id,
-      fromLabel: dealStageLabel(fromStage?.name ?? ""),
-      toLabel: dealStageLabel(toStage.name),
+      fromLabel: fromStage?.label ?? "",
+      toLabel: toStage.label,
       direction: moveDirection(fromStage?.sortOrder ?? 0, toStage.sortOrder),
     })
   }
@@ -567,7 +595,7 @@ export function DealsBoard({
       setPendingOutcome({
         dealId: deal.id,
         dealName: deal.name,
-        fromLabel: dealStageLabel(fromStage?.name ?? ""),
+        fromLabel: fromStage?.label ?? "",
       })
       return
     }
@@ -577,8 +605,8 @@ export function DealsBoard({
       dealId: deal.id,
       dealName: deal.name,
       toStageId: toStage.id,
-      fromLabel: dealStageLabel(fromStage?.name ?? ""),
-      toLabel: dealStageLabel(toStage.name),
+      fromLabel: fromStage?.label ?? "",
+      toLabel: toStage.label,
       direction: moveDirection(fromStage?.sortOrder ?? 0, toStage.sortOrder),
     })
   }
@@ -605,10 +633,11 @@ export function DealsBoard({
     }
     // Короткая запись по умолчанию, если комментарий пуст — перевод без
     // комментария раньше затирал deal.changes на null (карточка/дровер
-    // пустели). Обратный перевод: причина обязательна в диалоге и ВСЕГДА
-    // попадает в журнал (historyNote → Хронология/Лента решений) — только
-    // карточечное deal.changes (note) её не показывает (дежурная запись
-    // вместо неё), чтобы не путать с реальным текущим состоянием сделки.
+    // пустели). Комментарий необязателен в обе стороны; если он есть, он
+    // ВСЕГДА попадает в журнал (historyNote → Хронология/Лента решений).
+    // У обратного перевода карточечное deal.changes (note) его не показывает
+    // (дежурная запись вместо него), чтобы не путать с реальным текущим
+    // состоянием сделки.
     const stamp = `Переведено: ${move.toLabel}`
     const realNote = note.trim() || stamp
     const noteToSend = move.direction === "back" ? stamp : realNote
@@ -723,10 +752,7 @@ export function DealsBoard({
                 · открытых: <b className="text-foreground">{openCount}</b>
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <AiChatTrigger />
-              <GlobalSearch />
-            </div>
+            <PageHeaderActions />
           </div>
 
           <div className="flex items-center gap-3 flex-wrap rounded-xl border bg-card p-3">
@@ -790,7 +816,7 @@ export function DealsBoard({
               onDealsGenerated={router.refresh}
               trigger={
                 <Button size="sm" variant="secondary">
-                  <Sparkles className="h-4 w-4 mr-1" />
+                  <ScanSearch className="h-4 w-4 mr-1" />
                   Найти в источниках
                 </Button>
               }
@@ -821,6 +847,19 @@ export function DealsBoard({
                   <Button
                     size="icon-sm"
                     variant="outline"
+                    aria-label="Настройки стадий"
+                    onClick={() => setStageSettingsOpen(true)}
+                  >
+                    <SlidersVertical className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Настройки стадий</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
                     aria-label={
                       allCollapsed
                         ? "Развернуть все колонки"
@@ -842,6 +881,11 @@ export function DealsBoard({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <DealStageSettingsDialog
+              open={stageSettingsOpen}
+              onOpenChange={setStageSettingsOpen}
+              onSaved={refresh}
+            />
           </div>
         </div>
 
@@ -944,9 +988,6 @@ export function DealsBoard({
       <DealMoveDialog
         move={pendingMove}
         pending={isPending}
-        commitments={
-          pendingMove ? (board.commitments[pendingMove.toStageId] ?? []) : []
-        }
         onConfirm={confirmMove}
         onCancel={() => setPendingMove(null)}
       />

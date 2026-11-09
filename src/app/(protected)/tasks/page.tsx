@@ -1,5 +1,6 @@
 "use client"
 
+import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,7 +31,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { AlertTriangle, Loader, Plus, Rows4, PlayingCardsFan, X } from "lucide-react"
+import { AlertTriangle, Plus, Rows4, PlayingCardsFan, X } from "lucide-react"
 import type {
   TaskRow,
   OrgMemberOption,
@@ -42,8 +43,7 @@ import TaskEditDialog from "@/components/forms/form-task-edit"
 import { TaskCard } from "@/components/blocks/task-card"
 import { TaskDetailDrawer } from "@/components/blocks/task-detail-drawer"
 import { TaskTimeline } from "@/components/blocks/task-timeline"
-import { GlobalSearch } from "@/components/blocks/global-search"
-import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
+import { PageLoader } from "@/components/blocks/page-loader"
 
 const PAGE_SIZE = 6
 
@@ -252,6 +252,17 @@ function TaskTable({
   )
 }
 
+// Значение свёрнутого фильтра. «Все статусы»/«Все исполнители» в узкой
+// ячейке сетки обрезались до «Все …» (звонок 26.10) — когда фильтр не задан,
+// показываем приглушённое название поля; пункт «Все …» в выпадашке остаётся.
+function FilterValue({ label, isAll }: { label: string; isAll: boolean }) {
+  return (
+    <SelectValue placeholder={label}>
+      {isAll ? <span className="text-muted-foreground">{label}</span> : undefined}
+    </SelectValue>
+  )
+}
+
 export default function TasksPage() {
   return (
     <Suspense fallback={null}>
@@ -411,10 +422,7 @@ function TasksPageContent() {
     <div className="flex flex-col gap-4 p-4 pb-10 min-h-screen">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-medium">Задачи</h1>
-        <div className="flex items-center gap-2">
-          <AiChatTrigger />
-          <GlobalSearch />
-        </div>
+        <PageHeaderActions />
       </div>
 
       {/* Канбан без внешнего Card-контейнера — заголовок страницы достаточен. */}
@@ -438,7 +446,7 @@ function TasksPageContent() {
             <div className="grid flex-1 min-w-0 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Статус" />
+                <FilterValue label="Статус" isAll={statusFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все статусы</SelectItem>
@@ -451,7 +459,7 @@ function TasksPageContent() {
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Тип" />
+                <FilterValue label="Тип" isAll={typeFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все типы</SelectItem>
@@ -464,7 +472,7 @@ function TasksPageContent() {
             </Select>
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Приоритет" />
+                <FilterValue label="Приоритет" isAll={priorityFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все приоритеты</SelectItem>
@@ -477,7 +485,7 @@ function TasksPageContent() {
             </Select>
             <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Исполнитель" />
+                <FilterValue label="Исполнитель" isAll={assigneeFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все исполнители</SelectItem>
@@ -490,7 +498,7 @@ function TasksPageContent() {
             </Select>
             <Select value={clientFilter} onValueChange={setClientFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Клиент" />
+                <FilterValue label="Клиент" isAll={clientFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все клиенты</SelectItem>
@@ -503,7 +511,7 @@ function TasksPageContent() {
             </Select>
             <Select value={contactFilter} onValueChange={setContactFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Контакт" />
+                <FilterValue label="Контакт" isAll={contactFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все контакты</SelectItem>
@@ -518,7 +526,7 @@ function TasksPageContent() {
                 конкретная сделка (task.dealId). */}
             <Select value={dealFilter} onValueChange={setDealFilter}>
               <SelectTrigger size="sm" className="w-full">
-                <SelectValue placeholder="Сделка" />
+                <FilterValue label="Сделка" isAll={dealFilter === ALL} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Все сделки</SelectItem>
@@ -560,9 +568,7 @@ function TasksPageContent() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="animate-spin h-6 w-6" />
-            </div>
+            <PageLoader />
           ) : loadError && tasks.length === 0 ? (
             <Card className="border-dashed border-destructive/40 bg-destructive/5">
               <CardContent className="py-12 flex flex-col items-center gap-3 text-center">
@@ -609,9 +615,7 @@ function TasksPageContent() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="animate-spin h-6 w-6" />
-            </div>
+            <PageLoader />
           ) : (
             <TaskTimeline tasks={filteredTasks} onChanged={refreshAll} />
           )}

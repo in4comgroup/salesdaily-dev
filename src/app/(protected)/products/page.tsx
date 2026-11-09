@@ -1,5 +1,6 @@
 "use client"
 
+import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -39,8 +40,6 @@ import {
 } from "@/components/ui/popover"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { GlobalSearch } from "@/components/blocks/global-search"
-import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
 import { ProductDetailDialog } from "@/components/blocks/product-detail-dialog"
 import { OrdersTable } from "@/components/blocks/orders-table"
 import {
@@ -70,6 +69,7 @@ import type {
 } from "@/app/api/products/route"
 import type { OrderRequestItemView } from "@/app/api/order-requests/route"
 import { parseQtyHint } from "@/lib/order-request"
+import { PageLoader } from "@/components/blocks/page-loader"
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 const DEFAULT_PAGE_SIZE = 10
@@ -547,7 +547,7 @@ export default function ProductsPage() {
     clientId: string | null
     description: string
   }) => {
-    builder.openNew()
+    builder.openNew(cardPrefill?.cardId)
     if (opts.clientId) builder.setClientId(opts.clientId)
     if (opts.description) builder.setDescription(opts.description)
     setTab("catalog")
@@ -578,6 +578,7 @@ export default function ProductsPage() {
   // VERBATIM client message (message.orderRequest), open it, and strip the
   // param so a refresh / back-nav doesn't re-trigger.
   const [cardPrefill, setCardPrefill] = useState<{
+    cardId: string
     clientId: string | null
     rawText: string
   } | null>(null)
@@ -592,6 +593,7 @@ export default function ProductsPage() {
         if (!res.ok) return
         const { card } = await res.json()
         setCardPrefill({
+          cardId,
           clientId: card?.clients?.[0]?.id ?? null,
           rawText: card?.message?.orderRequest ?? "",
         })
@@ -611,6 +613,21 @@ export default function ProductsPage() {
     if (!orderId) return
     window.history.replaceState(null, "", window.location.pathname)
     editOrder(orderId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Deep-link from the dashboard's own New Order dialog
+  // (/products?assembleRequest=<requestId>&cardId=<cardId>): the request was
+  // already created + parsed from the dashboard (see dashboard/page.tsx's
+  // NewOrderDialog onAssemble), so this just runs startAssembly directly —
+  // no need to show the dialog again here.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const requestId = params.get("assembleRequest")
+    if (!requestId) return
+    const cardId = params.get("cardId") ?? undefined
+    window.history.replaceState(null, "", window.location.pathname)
+    void startAssembly(requestId, cardId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -647,7 +664,7 @@ export default function ProductsPage() {
   }, [])
 
   const startAssembly = useCallback(
-    async (requestId: string) => {
+    async (requestId: string, explicitCardId?: string) => {
       try {
         const res = await fetch(
           `/api/order-requests?id=${encodeURIComponent(requestId)}`,
@@ -682,6 +699,24 @@ export default function ProductsPage() {
           return
         }
         const orderId = oData.id as string
+        // Same handoff rule as the manual branch in useOrderBuilder's
+        // persist() — a real order row now exists for this card, so that IS
+        // the decision on it. Best-effort, doesn't block the wizard.
+        // `explicitCardId` covers the deep-link entry from the dashboard's
+        // own New Order dialog (?assembleRequest=&cardId=); cardPrefill
+        // covers the older orderFromCard→dialog-on-this-page route.
+        const cardToAccept = explicitCardId ?? cardPrefill?.cardId
+        if (cardToAccept) {
+          void fetch("/api/cards", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: cardToAccept,
+              action: "accept",
+              resultOrderId: orderId,
+            }),
+          }).catch(() => {})
+        }
         await fetch("/api/order-requests", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -705,7 +740,7 @@ export default function ProductsPage() {
         toast.error("Не удалось запустить мастер")
       }
     },
-    [builder, applyItemToFilters],
+    [builder, applyItemToFilters, cardPrefill],
   )
 
   // Stamp the current item's outcome and advance, or end the walkthrough.
@@ -896,10 +931,7 @@ export default function ProductsPage() {
     <div className="flex flex-col gap-4 p-4 pb-10 min-h-screen">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-medium">Заказы & продукты</h1>
-        <div className="flex items-center gap-2">
-          <AiChatTrigger />
-          <GlobalSearch />
-        </div>
+        <PageHeaderActions />
       </div>
 
       <div className="w-full">
@@ -1151,7 +1183,7 @@ export default function ProductsPage() {
                             colSpan={catalogColSpan}
                             className="h-40 text-center"
                           >
-                            <Loader className="animate-spin h-6 w-6 mx-auto" />
+                            <PageLoader className="min-h-0" />
                           </TableCell>
                         </TableRow>
                       ) : rows.length === 0 ? (

@@ -1,8 +1,7 @@
 import { getActiveOrgRole, listOrgSources } from "@/server/sources"
+import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 import { getServerSession } from "@/lib/get-session"
 import { SourcesPageShell } from "@/components/blocks/sources-page-shell"
-import { GlobalSearch } from "@/components/blocks/global-search"
-import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
 
 export default async function SourcesPage() {
   const session = await getServerSession()
@@ -25,10 +24,7 @@ export default async function SourcesPage() {
     <div className="flex flex-col gap-4 p-4 pb-10 min-h-screen">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-medium">Источники данных</h1>
-        <div className="flex items-center gap-2">
-          <AiChatTrigger />
-          <GlobalSearch />
-        </div>
+        <PageHeaderActions />
       </div>
 
       <div className="w-full space-y-6">

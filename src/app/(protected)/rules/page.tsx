@@ -1,20 +1,17 @@
 "use client"
 
+import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 import { authClient } from "@/lib/auth-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader } from "lucide-react"
 import { TableRules } from "@/components/tables/table-rules"
-import { GlobalSearch } from "@/components/blocks/global-search"
-import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
+import { PageLoader } from "@/components/blocks/page-loader"
 
 export default function RulesPage() {
   const { data: session, isPending } = authClient.useSession()
 
   if (isPending) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader className="animate-spin h-8 w-8 text-gray-900 dark:text-gray-100" />
-      </div>
+      <PageLoader className="min-h-screen" />
     )
   }
 
@@ -24,10 +21,7 @@ export default function RulesPage() {
     <div className="flex flex-col gap-4 p-4 pb-10 min-h-screen">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-medium">Правила</h1>
-        <div className="flex items-center gap-2">
-          <AiChatTrigger />
-          <GlobalSearch />
-        </div>
+        <PageHeaderActions />
       </div>
 
       <Card className="w-full">

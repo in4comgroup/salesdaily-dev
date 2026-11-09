@@ -11,10 +11,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  MapPin,
   Globe,
   CloudSync,
-  MessageSquare,
   Clock,
   Briefcase,
   ChevronLeft,
@@ -25,7 +23,6 @@ import type { DealRow } from "@/app/api/deals/route"
 import type { TaskRow } from "@/app/api/tasks/route"
 import { ClientLookupDialog } from "@/components/blocks/client-lookup-dialog"
 import { formatAmount, formatCompactNumber, CURRENCY_SYMBOL } from "@/lib/deal-board"
-import { dealStageLabel } from "@/lib/deal-funnel"
 import {
   clientAtRisk,
   clientStaleDays,
@@ -47,7 +44,13 @@ const COMPANY_KIND_COLOR: Record<string, string> = {
 // dimmed below.
 // Хью — те же, что уже использует доска сделок (src/lib/deal-board.ts +
 // deal-kanban-card.tsx), а не разрозненные Tailwind-цвета.
-const STATUS_COLOR: Record<string, string> = {
+// Общая карта цветов статуса компании — используется и карточкой, и
+// табличным видом на /clients. «Новая» (initial — найдена системой,
+// ждёт проверки человеком) — оранжевая, «Активная» — зелёная, чтобы их было
+// видно с первого взгляда.
+export const STATUS_COLOR: Record<string, string> = {
+  active:
+    "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
   initial: "bg-[#C2410C]/15 text-[#C2410C] dark:text-[#E5824A]",
   suspended: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
   deleted: "bg-red-500/15 text-red-600 dark:text-red-300",
@@ -56,11 +59,11 @@ const STATUS_COLOR: Record<string, string> = {
 
 // UI display labels for the status badge (DB enum values stay English).
 const STATUS_LABEL: Record<string, string> = {
-  active: "Активный",
-  initial: "Новый",
-  suspended: "Приостановлен",
-  deleted: "Удалён",
-  blocked: "Заблокирован",
+  active: "Активная",
+  initial: "Новая",
+  suspended: "Приостановлена",
+  deleted: "Удалена",
+  blocked: "Заблокирована",
 }
 
 // Блок аккаунт-менеджмента (UX со звонка 14.08): выручка за 12 мес., активная
@@ -75,8 +78,9 @@ export function AccountSummary({
   revenue?: ClientRevenueSummary
   activeDeal?: DealRow
 }) {
-  const days = clientStaleDays(client.updatedAt)
-  const stale = clientAtRisk(client.updatedAt)
+  const activityAt = client.lastActivityAt ?? client.updatedAt
+  const days = clientStaleDays(activityAt)
+  const stale = clientAtRisk(activityAt)
   const symbol = (
     CURRENCY_SYMBOL[client.currency.toUpperCase()] ?? client.currency
   ).trim()
@@ -103,7 +107,7 @@ export function AccountSummary({
         </span>
         {activeDeal && (
           <span className="text-xs shrink-0 text-right">
-            {dealStageLabel(activeDeal.funnelStageName)}
+            {activeDeal.funnelStageLabel}
             {dealAmount ? ` · ${dealAmount}` : ""}
           </span>
         )}
@@ -128,8 +132,8 @@ export function AccountSummary({
             </span>
           </TooltipTrigger>
           <TooltipContent align="start" className="max-w-xs text-xs">
-            Компания давно не касалась ни одной записи в системе — возможно,
-            стоит связаться.
+            По компании давно не было активности — ни писем и сообщений, ни
+            задач, сделок или заказов. Возможно, стоит связаться.
           </TooltipContent>
         </Tooltip>
       )}
@@ -182,7 +186,7 @@ export function ClientCard({
         // «Подробнее» (звонок 18.09: «мне почему-то надо кликать на
         // кнопочку подробнее» вместо клика по карточке). Кнопка остаётся
         // как явный CTA; вложенные интерактивные элементы (поиск в
-        // интернете, «Ещё о компании», ссылка на сайт, пагинация задач)
+        // интернете, ссылка на сайт, пагинация задач)
         // сами глушат всплытие через stop(e).
         // Белый bg-card (не кремовая подложка) — с тех пор, как страница
         // потеряла внешний белый Card-контейнер, страница-фон просвечивал
@@ -195,37 +199,47 @@ export function ClientCard({
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <CardTitle className="truncate">{client.name}</CardTitle>
-          {client.namePhys && (
-            <div className="text-sm text-muted-foreground truncate">
-              {client.namePhys}
+          {client.webUrl && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Globe className="h-3.5 w-3.5 shrink-0" />
+              <a
+                href={client.webUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate hover:underline text-[#2F5D77] dark:text-[#9FC4DC]"
+                onClick={stop}
+              >
+                {client.webUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </a>
             </div>
           )}
-          {/* Funnel-phase badge intentionally hidden for now — only the
-              non-active status + company-kind badges are shown. */}
-          {(client.status !== "active" || client.customFields?.companyKind) && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {client.status !== "active" && (
-                <Badge
-                  variant="secondary"
-                  className={STATUS_COLOR[client.status] ?? ""}
-                >
-                  {STATUS_LABEL[client.status] ?? client.status}
-                </Badge>
-              )}
-              {client.customFields?.companyKind && (
-                <Badge
-                  variant="secondary"
-                  className={
-                    COMPANY_KIND_COLOR[client.customFields.companyKind] ?? ""
-                  }
-                >
-                  {COMPANY_KIND_LABELS[client.customFields.companyKind]}
-                </Badge>
-              )}
-            </div>
-          )}
+          {/* Funnel-phase badge intentionally hidden for now — status (incl.
+              «Активная») + company-kind badges are shown. */}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge
+              variant="secondary"
+              className={STATUS_COLOR[client.status] ?? ""}
+            >
+              {STATUS_LABEL[client.status] ?? client.status}
+            </Badge>
+            {client.customFields?.companyKind && (
+              <Badge
+                variant="secondary"
+                className={
+                  COMPANY_KIND_COLOR[client.customFields.companyKind] ?? ""
+                }
+              >
+                {COMPANY_KIND_LABELS[client.customFields.companyKind]}
+              </Badge>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
+        {/* stop на обёртке, а не только на триггере: модалка рендерится
+            порталом, но синтетические события React всплывают по дереву
+            КОМПОНЕНТОВ — клики внутри неё («Искать», «Сохранить», клик по
+            оверлею для закрытия) иначе доходили до onClick карточки и
+            открывали правый дровер поверх/после модалки (звонок 26.10). */}
+        <div className="flex items-center gap-1" onClick={stop}>
           <ClientLookupDialog
             client={client}
             onSaved={onChanged}
@@ -313,48 +327,6 @@ export function ClientCard({
 
         {/* Email/телефон — только на /clients/[id], не на компактной карточке. */}
 
-        {/* Адрес/сайт/комментарий — второстепенная справочная информация,
-            свёрнута по умолчанию (это не то, ради чего открывают карточку
-            компании — см. обсуждение аккаунт-менеджмента). */}
-        {(client.address || client.webUrl || client.comment) && (
-          <details className="text-muted-foreground text-xs">
-            <summary
-              className="cursor-pointer select-none hover:text-foreground"
-              onClick={stop}
-            >
-              Ещё о компании
-            </summary>
-            <div className="mt-1.5 space-y-1">
-              {client.address && (
-                <div className="flex items-center gap-2 truncate">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{client.address}</span>
-                </div>
-              )}
-              {client.webUrl && (
-                <div className="flex items-center gap-2 truncate">
-                  <Globe className="h-3.5 w-3.5 shrink-0" />
-                  <a
-                    href={client.webUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="truncate hover:underline text-[#2F5D77] dark:text-[#9FC4DC]"
-                    onClick={stop}
-                  >
-                    {client.webUrl}
-                  </a>
-                </div>
-              )}
-              {client.comment && (
-                <div className="flex items-start gap-2">
-                  <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span className="line-clamp-2">{client.comment}</span>
-                </div>
-              )}
-            </div>
-          </details>
-        )}
-
         {client.contacts.length > 0 && (
           <div className="rounded-md border p-2 space-y-1">
             <div className="text-xs font-medium text-muted-foreground">
@@ -381,11 +353,11 @@ export function ClientCard({
             «Подробнее» убрана — клик по всей карточке и так открывает
             дровер (см. onClick на <Card> выше). */}
         <div className="flex-1" aria-hidden />
-        {client.userName && (
-          <div className="pt-1 text-xs text-muted-foreground truncate">
-            Кто создал: {client.userName}
-          </div>
-        )}
+        <div className="pt-1 text-xs text-muted-foreground truncate">
+          Создана:{" "}
+          {new Date(client.createdAt).toLocaleDateString("ru-RU")}
+          {client.userName && ` · ${client.userName}`}
+        </div>
       </CardContent>
     </Card>
   )

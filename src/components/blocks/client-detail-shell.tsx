@@ -56,10 +56,10 @@ const PHASE_LABEL: Record<string, string> = {
   retention: "Удержание",
 }
 const STATUS_LABEL: Record<string, string> = {
-  active: "Активный",
-  initial: "Новый",
-  suspended: "Приостановлен",
-  deleted: "Удалён",
+  active: "Активная",
+  initial: "Новая",
+  suspended: "Приостановлена",
+  deleted: "Удалена",
 }
 
 const CONTACTS_PAGE_SIZE = 5
@@ -111,6 +111,7 @@ export function ClientDetailShell({
       organizationId: detail.organizationId,
       createdAt: detail.createdAt,
       updatedAt: detail.updatedAt,
+      lastActivityAt: detail.lastActivityAt,
       contacts: detail.contacts.map((c) => ({
         id: c.id,
         name: c.name,

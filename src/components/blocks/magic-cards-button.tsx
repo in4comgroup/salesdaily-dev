@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader, Wand2 } from "lucide-react"
+import { AnchorTooltip, useAnchorTooltip } from "@/components/blocks/anchor-tooltip"
 import { toast } from "sonner"
 import { useAiModels } from "@/hooks/use-ai-models"
 import type { RuleRow } from "@/app/api/rules/route"
@@ -42,6 +43,7 @@ export function MagicCardsButton({
 }) {
   const [running, setRunning] = useState(false)
   const aiModels = useAiModels("cards")
+  const tip = useAnchorTooltip()
 
   const handleClick = async () => {
     setRunning(true)
@@ -117,25 +119,29 @@ export function MagicCardsButton({
     }
   }
 
+  // Кнопка-иконка без подписи, как Magic на «Компаниях» — название в
+  // подсказке (AnchorTooltip).
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={handleClick}
-      title={aiModels.enabled ? undefined : "ИИ недоступен в текущей конфигурации"}
-      disabled={running || !aiModels.enabled}
-    >
-      {running ? (
-        <>
-          <Loader className="h-4 w-4 mr-1 animate-spin" />
-          Магия…
-        </>
-      ) : (
-        <>
-          <Wand2 className="h-4 w-4 mr-1" />
-          Magic
-        </>
-      )}
-    </Button>
+    <>
+      <Button
+        size="icon-sm"
+        variant="outline"
+        onClick={handleClick}
+        disabled={running || !aiModels.enabled}
+        aria-label={aiModels.enabled ? "Magic" : "ИИ недоступен в текущей конфигурации"}
+        {...tip.bind}
+      >
+        {running ? (
+          <Loader className="h-4 w-4 animate-spin" />
+        ) : (
+          <Wand2 className="h-4 w-4" />
+        )}
+      </Button>
+      <AnchorTooltip
+        text={!aiModels.enabled ? "ИИ недоступен в текущей конфигурации" : running ? "Магия…" : "Magic"}
+        open={tip.open}
+        virtualRef={tip.virtualRef}
+      />
+    </>
   )
 }

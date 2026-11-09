@@ -831,3 +831,71 @@ NO deep-link tenant binding (the bot IS the tenant). See `src/app/CLAUDE.md`
   wanted, a `deleteWebhook` action + a cron poll would be the seam.
 - **Self-hosted Bot API server** (`TELEGRAM_API_BASE_URL`) — only if the
   20 MB cap or higher throughput becomes a real constraint.
+
+---
+
+## 21. Product backlog from client-feedback calls (09.10 + 17.10.2026)
+
+Items raised on the 09.10 and 17.10 calls that were explicitly deferred
+(the same calls' items 1–4 — optional move comment, agent no longer
+overriding a manual move, fresh companies first, real source on dashboard
+cards — shipped right after). Transcripts live next to the recordings in
+`записи встреч/`.
+
+- **Company event feed (client history).** A per-company chronological
+  activity stream — what happened, when, by whom — independent of whether a
+  deal exists. Today chronology lives only inside a deal (`deal_activity`), so
+  a company / contact / task with no deal has no history at all. Must fold in
+  the card accept/reject history (a card decision is part of the client's
+  history). Pilot clients (Масловы) keep exactly this as a dated free-text
+  column in Excel. Open design question: one stream per company vs several
+  "streams" per company — a signed client can run separate large projects /
+  tenders as their own funnels under one contract, plus potential contacts
+  being warmed up with no deal yet; all of these need to be linked to the
+  company.
+- **Home page as a dashboard.** Replace the plain card grid on «Домашняя» with
+  modules for three entity sets: (1) **needs a decision** — Truffalo cards;
+  (2) **needs an action** — my tasks, incl. overdue; (3) **event stream** —
+  everything that happened (new companies/contacts, created/moved deals…),
+  as a right-hand feed with filters. Plus a short summary (new companies /
+  contacts, "hot" tasks, deal stats). Keep «Аналитика» as sales analytics;
+  this is the operational view, not a separate screen.
+- **Selectable sales methodology.** Let the org pick a sales methodology
+  (e.g. one with a stakeholder/role map per deal, as a client described from
+  a previous job) so the agent's hints and card recommendations follow it.
+  Methodologies as pluggable prompt context; must be reachable everywhere the
+  agent advises, not only as a contextual tooltip.
+
+---
+
+## 22. Companies feed — move sorting back to the server at scale
+
+Today `/clients` loads the WHOLE tab in one request (`FEED_LIMIT = 500`) and
+sorts it client-side with `sortClientFeed` (`src/lib/client-feed-sort.ts`) so
+«Сначала новые / Сначала критичные» switches instantly with a motion layout
+animation. Fine at current volume (largest org: 22 companies), but the client
+says an org may have hundreds/thousands. Past ~300–500 companies:
+
+- **Payload / DOM cost.** Thousands of rows ≈ 1–2 MB JSON and thousands of
+  animated cards in the DOM — slow first load, janky reorder.
+- **Wrong order past the cap.** Over 500 the page shows «Показаны первые N из
+  M», and sorting only covers the loaded part.
+- **`listClientsFeed` itself doesn't scale.** It already loads every org
+  client + deals + task summary into memory and filters/sorts in JS on every
+  request.
+
+Plan (≈ half a day):
+
+1. Rewrite `listClientsFeed` as SQL: tab classification (closed/open deal
+   stages, `custom_fields.companyKind`) as joins/`EXISTS`, `ORDER BY` for both
+   modes (`created_at desc`; critical = overdue-task count desc → stale
+   (`updated_at` < now − `CLIENT_STALE_THRESHOLD_DAYS`) desc → `updated_at`
+   desc), `LIMIT/OFFSET`. Keep `sortClientFeed` as the reference definition
+   (or delete it) so the two orders can't drift.
+2. Restore the `sort` query param on `GET /api/clients?tab=…` and scroll
+   loading (`useInfiniteScroll`) on the page.
+3. Keep the UX: on sort switch keep the current list on screen until the new
+   page arrives (no blank state / spinner), then animate only the visible
+   cards/rows into place.
+4. Consider virtualization for the table view if a tab is still thousands of
+   rows after filtering.

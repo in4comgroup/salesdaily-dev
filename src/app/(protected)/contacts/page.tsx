@@ -1,5 +1,6 @@
 "use client"
 
+import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,15 +28,14 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { AlertTriangle, Loader, Plus, Rows4, PlayingCardsFan } from "lucide-react"
+import { AlertTriangle, Plus, Rows4, PlayingCardsFan } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnchorTooltip, useAnchorTooltip } from "@/components/blocks/anchor-tooltip"
 import type { ContactRow, ClientOption } from "@/app/api/contacts/route"
 import ContactEditDialog from "@/components/forms/form-contact-edit"
 import { ContactDetailDrawer } from "@/components/blocks/contact-detail-drawer"
 import { ContactCard } from "@/components/blocks/contact-card"
-import { GlobalSearch } from "@/components/blocks/global-search"
-import { AiChatTrigger } from "@/components/blocks/global-ai-chat"
+import { PageLoader } from "@/components/blocks/page-loader"
 
 type ContactView = "cards" | "table"
 
@@ -147,10 +147,7 @@ export default function ContactsPage() {
     <div className="flex flex-col h-[calc(100vh-1rem)] p-4 gap-4">
       <div className="flex items-center justify-between gap-4 shrink-0">
         <h1 className="text-xl font-medium">Контакты</h1>
-        <div className="flex items-center gap-2">
-          <AiChatTrigger />
-          <GlobalSearch />
-        </div>
+        <PageHeaderActions />
       </div>
 
       {/* «Новый контакт» — слева; селекты статуса/компании следом;
@@ -216,9 +213,7 @@ export default function ContactsPage() {
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
         {loading && rows.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="animate-spin h-6 w-6" />
-          </div>
+          <PageLoader />
         ) : loadError && rows.length === 0 ? (
           <Card className="border-dashed border-destructive/40 bg-destructive/5">
             <CardContent className="py-12 flex flex-col items-center gap-3 text-center">

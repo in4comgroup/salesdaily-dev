@@ -1,15 +1,9 @@
 "use client"
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-  type ReactNode,
-} from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { AnchorTooltip, useAnchorTooltip } from "@/components/blocks/anchor-tooltip"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -30,9 +24,11 @@ import {
 import {
   Building2,
   Check,
+  ChevronDown,
+  ChevronUp,
   Contact,
   FileText,
-  Link2,
+  ListTodo,
   ShoppingCart,
   Users,
   X,
@@ -40,6 +36,7 @@ import {
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import TaskEditDialog from "@/components/forms/form-task-edit"
+import { SourceMessageDialog } from "@/components/blocks/source-message-dialog"
 import type { CardRow } from "@/app/api/cards/route"
 import type {
   CardCategory,
@@ -48,6 +45,28 @@ import type {
   TaskStatus,
   TaskType,
 } from "@/db/schema"
+
+// Канал источника по-человечески — вместо внутреннего id/хэша.
+const SOURCE_CHANNEL_LABEL: Record<string, string> = {
+  nylas: "Письмо",
+  imap: "Письмо",
+  telegram: "Telegram",
+  gchat: "Google Chat",
+  gdrive: "Google Drive",
+  whatsapp: "WhatsApp",
+  dropoff: "Файл",
+  aichat: "ИИ чат",
+}
+
+function formatSourceDate(iso: string | null): string | null {
+  if (!iso) return null
+  return new Date(iso).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
 
 const PRIORITY_LABEL: Record<CardPriority, string> = {
   normal: "Обычный",
@@ -58,7 +77,7 @@ const CATEGORY_LABEL: Record<CardCategory, string> = {
   client_activity: "Активность клиента",
   colleagues_activity: "Активность коллег",
   business_info: "Бизнес-информация",
-  action_required: "Требуется действие",
+  action_required: "Нужен ответ",
   ambiguity: "Неоднозначность",
   data_intelligence: "Аналитика данных",
   momentum: "Динамика",
@@ -67,22 +86,16 @@ const CATEGORY_LABEL: Record<CardCategory, string> = {
   support: "Поддержка",
 }
 
-// Хью взяты из палитры доски сделок («драгоценные тона», src/lib/deal-board.ts
-// STAGE_COLOR + бейджи deal-kanban-card.tsx), а не разрозненного набора Tailwind-
-// цветов — чтобы Домашняя читалась как часть того же продукта, что и Сделки.
-const CATEGORY_COLOR: Record<CardCategory, string> = {
-  client_activity: "bg-blue-500/15 text-blue-600 dark:text-blue-300",
-  colleagues_activity: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
-  business_info: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
-  action_required:
-    "bg-[#C1121F]/10 text-[#A31018] dark:bg-[#C1121F]/15 dark:text-[#FF8F96]",
-  ambiguity: "bg-[#C2410C]/15 text-[#C2410C] dark:text-[#E5824A]",
-  data_intelligence: "bg-[#294A6B]/15 text-[#294A6B] dark:text-[#8FB4D9]",
-  momentum: "bg-teal-500/15 text-teal-600 dark:text-teal-300",
-  log_only: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
-  new_order: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  support: "bg-[#669BBC]/20 text-[#2F5D77] dark:text-[#9FC4DC]",
-}
+// Статус-бейдж под приоритетом больше НЕ показывает категорию (она и так
+// всегда в заголовке карточки — дублирование того же текста дважды читалось
+// как баг: «бейдж пропал» воспринималось как «решение уже принято», хотя это
+// просто была другая категория). Один цвет на все категории — бейдж отвечает
+// только на вопрос «решение уже принято или нет», сам текст решения
+// (Принята/Отклонена) задаётся прямо в месте использования. Красный — то же
+// предупреждающее прочтение, что было у старого бейджа категории
+// action_required («Требуется действие»), только теперь относится к ЛЮБОЙ
+// нерешённой карточке, а не только к одной категории.
+const STATUS_PENDING_COLOR = "bg-red-500/15 text-red-600 dark:text-red-300"
 
 const PRIORITY_COLOR: Record<CardPriority, string> = {
   normal: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
@@ -110,7 +123,6 @@ function MessageField({
   label,
   text,
   highlight = false,
-  action,
   noClamp = false,
 }: {
   label: string
@@ -119,9 +131,6 @@ function MessageField({
   // оператора, поэтому визуально выделяется цветным блоком (в отличие от
   // «Анализ», который просто контекст).
   highlight?: boolean
-  // «Создать заказ» на new_order-карточках живёт прямо в блоке рекомендации
-  // (прижато вправо), а не отдельной кнопкой внизу карточки.
-  action?: ReactNode
   // Рекомендация теперь показывается ПОЛНОСТЬЮ, без клэмпа на 3 строки и
   // без hover-card — карточка и так скроллится по вертикали (см. CardContent
   // выше), так что обрезать текст незачем.
@@ -197,9 +206,6 @@ function MessageField({
       ) : (
         paragraph
       )}
-      {/* На следующей строке — ширину растягивает сам вызывающий компонент
-          через свой className, MessageField её не навязывает. */}
-      {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }
@@ -216,23 +222,67 @@ function formatDate(iso: string): string {
 export function DashboardCard({
   card,
   onChanged,
+  onCreateOrder,
 }: {
   card: CardRow
   onChanged: () => void
+  // «Создать заказ» on a new_order card — when provided, opens the New Order
+  // dialog right here on the dashboard instead of navigating to /products
+  // first (see dashboard/page.tsx). Falls back to the old Link-based
+  // navigation when omitted, so this component still works if ever reused
+  // somewhere without that wiring.
+  onCreateOrder?: (card: CardRow) => void
 }) {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
+  const [sourceOpen, setSourceOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const resolved = card.accepted || !!card.rejectionReason
+  const sourceChannel = card.sourceProvider
+    ? (SOURCE_CHANNEL_LABEL[card.sourceProvider] ?? card.sourceProvider)
+    : null
 
-  const handleAccept = () => {
+  // Чевроны вместо градиентов-подсказок: кнопка видна только когда реально
+  // есть куда скроллить в эту сторону (а не просто «на всякий случай»).
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollUp, setCanScrollUp] = useState(false)
+  const [canScrollDown, setCanScrollDown] = useState(false)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const check = () => {
+      setCanScrollUp(el.scrollTop > 1)
+      setCanScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
+    }
+    check()
+    el.addEventListener("scroll", check)
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener("scroll", check)
+      ro.disconnect()
+    }
+  }, [card])
+
+  const scrollByPage = (direction: 1 | -1) => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollBy({ top: direction * el.clientHeight, behavior: "smooth" })
+  }
+
+  const handleAccept = (taskId?: string) => {
     startTransition(async () => {
       try {
         const res = await fetch("/api/cards", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: card.id, action: "accept" }),
+          body: JSON.stringify({
+            id: card.id,
+            action: "accept",
+            ...(taskId ? { resultTaskId: taskId } : {}),
+          }),
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
@@ -277,6 +327,8 @@ export function DashboardCard({
       }
     })
   }
+
+  const titleTip = useAnchorTooltip()
 
   const analysis = card.message?.analysis ?? ""
   const recommendation = card.message?.recommendation ?? ""
@@ -329,13 +381,54 @@ export function DashboardCard({
         // gap above the footer group.
         "flex flex-col h-120 gap-4 overflow-hidden",
         CARD_SURFACE,
+        // Принятые/отклонённые карточки слегка темнее — читается как «уже
+        // решено, внимания больше не требует», без ухода в неразличимость.
+        // Светлая тема: --muted и так лишь чуть темнее --card (L 0.955 vs
+        // 1.0) — этого достаточно. Тёмная тема: --muted (L 0.2738) почти
+        // не отличается от --card (L 0.2938, разница вдвое меньше, чем в
+        // светлой) — на тёмной теме решённая карточка читалась как
+        // нерешённая. dark:bg-background берёт более тёмный токен страницы
+        // (L 0.2321) вместо --muted, давая заметную разницу там, где не
+        // хватало светлой темы. Непрозрачные цвета без альфы (не bg-muted/50)
+        // — изначально это было ради честного перехода под градиент снизу,
+        // но тот градиент заменили на чевроны (см. ниже), так что это условие
+        // больше не обязательно, просто сохранили как есть.
+        resolved && "bg-muted hover:bg-muted dark:bg-background dark:hover:bg-background",
       )}
     >
-      <CardHeader className="pb-1.5 space-y-2">
+      {/* grid-cols-1 (= minmax(0,1fr)): CardHeader — grid, и без этого
+          колонка растягивалась по содержимому — длинное название компании
+          не транкейтилось, а уезжало за край карточки вместе с датой. */}
+      <CardHeader className="pb-1.5 space-y-2 grid-cols-1">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base min-w-0 flex-1 truncate">
-            {CATEGORY_LABEL[card.category]}
-          </CardTitle>
+          {/* Компания — главное в карточке (звонок 26.10: «имя компании, по
+              которой сделка, важнее»), поэтому она и есть заголовок, а
+              категория — подзаголовок. Компанию резолвит сервер
+              (resolveCardCompanies в src/server/cards.ts); не нашлась —
+              заголовком остаётся категория, ФИО вместо компании не ставим. */}
+          <div className="min-w-0 flex-1">
+            <CardTitle
+              className="text-base truncate"
+              // Полное название по ховеру — только если оно правда обрезано.
+              onMouseEnter={(e) => {
+                const el = e.currentTarget
+                if (el.scrollWidth > el.clientWidth) titleTip.bind.onMouseEnter(e)
+              }}
+              onMouseLeave={titleTip.bind.onMouseLeave}
+            >
+              {card.company?.name ?? CATEGORY_LABEL[card.category]}
+            </CardTitle>
+            <AnchorTooltip
+              text={card.company?.name ?? CATEGORY_LABEL[card.category]}
+              open={titleTip.open}
+              virtualRef={titleTip.virtualRef}
+            />
+            {card.company && (
+              <div className="mt-0.5 truncate text-sm text-muted-foreground">
+                {CATEGORY_LABEL[card.category]}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex flex-wrap gap-1.5 min-w-0">
@@ -345,12 +438,14 @@ export function DashboardCard({
             >
               {PRIORITY_LABEL[card.priority]} приоритет
             </Badge>
-            <Badge
-              className={CATEGORY_COLOR[card.category]}
-              variant="secondary"
-            >
-              {CATEGORY_LABEL[card.category]}
-            </Badge>
+            {/* Статус, не категория — категория уже в заголовке выше.
+                Один и тот же текст/цвет для ЛЮБОЙ категории, пока карточка
+                не решена; сменяется на Принята/Отклонена ниже. */}
+            {!resolved && (
+              <Badge className={STATUS_PENDING_COLOR} variant="secondary">
+                Требуется решение
+              </Badge>
+            )}
             {card.accepted && (
               <Badge
                 variant="secondary"
@@ -383,7 +478,10 @@ export function DashboardCard({
             (scrollbar-none — скроллбар спрятан, скролл работает) с
             градиентом-подсказкой внизу, а не тихая обрезка. */}
         <div className="relative flex-1 min-h-0">
-        <div className="h-full overflow-y-auto scrollbar-none space-y-3 pt-4 pb-4">
+        <div
+          ref={scrollRef}
+          className="h-full overflow-y-auto scrollbar-none space-y-3 pt-4 pb-4"
+        >
           {analysis && <MessageField label="Анализ" text={analysis} noClamp />}
           {recommendation && (
             <MessageField
@@ -391,19 +489,6 @@ export function DashboardCard({
               text={recommendation}
               highlight
               noClamp
-              action={
-                card.category === "new_order" ? (
-                  <Button asChild size="sm" variant="outline" className="w-full">
-                    {/* Hands the card off to /products, where the New Order
-                        dialog opens prefilled with the linked client + the
-                        verbatim client message (message.orderRequest). */}
-                    <Link href={`/products?orderFromCard=${card.id}`}>
-                      <ShoppingCart className="h-4 w-4 mr-1" />
-                      Создать заказ
-                    </Link>
-                  </Button>
-                ) : undefined
-              }
             />
           )}
           {!analysis && !recommendation && (
@@ -424,9 +509,47 @@ export function DashboardCard({
         {(card.clients.length > 0 ||
           card.contacts.length > 0 ||
           card.users.length > 0 ||
-          card.ruleName ||
-          card.sourceItemTitle) && (
+          card.sourceItemId) && (
           <div className="space-y-1.5 text-xs text-muted-foreground">
+            {/* Реальный источник, на основании которого создана карточка
+                (письмо / сообщение в Telegram / файл) — must have, пока
+                пользователь не доверяет системе: открыть оригинал прямо
+                здесь и проверить, кто и что на самом деле написал. */}
+            {card.sourceItemId && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  Источник
+                </div>
+                <div className="pl-[22px] space-y-1">
+                  {/* Кликабельна строка «канал · отправитель · дата» — она
+                      есть у любого источника (у карточки заказа первая строка
+                      сообщения может быть пустой). Пунктир, как у ссылок
+                      «JSON»: откроется здесь же, в модалке, без перехода.
+                      pb-1 обязателен: truncate = overflow:hidden, и без
+                      нижнего отступа подчёркивание (underline-offset-4)
+                      выпадает за бокс и обрезается — проверено в Chromium. */}
+                  <button
+                    type="button"
+                    onClick={() => setSourceOpen(true)}
+                    className="block max-w-full truncate pb-1 text-left underline decoration-dashed decoration-muted-foreground/60 underline-offset-4 hover:text-foreground hover:decoration-foreground cursor-pointer"
+                  >
+                    {[
+                      sourceChannel,
+                      card.sourceSender,
+                      formatSourceDate(card.sourceCreatedAt),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Открыть источник"}
+                  </button>
+                  {card.sourceItemTitle && (
+                    <p className="truncate text-foreground">
+                      {card.sourceItemTitle}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             {card.clients.length > 0 && (
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
@@ -475,32 +598,35 @@ export function DashboardCard({
                 <p className="pl-[22px]">{card.users.map((u) => u.name).join(", ")}</p>
               </div>
             )}
-            {card.ruleName && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
-                  <Link2 className="h-3.5 w-3.5 shrink-0" />
-                  Правило
-                </div>
-                <p className="pl-[22px] truncate">{card.ruleName}</p>
-              </div>
-            )}
-            {card.sourceItemTitle && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide">
-                  <FileText className="h-3.5 w-3.5 shrink-0" />
-                  Источник
-                </div>
-                <p className="pl-[22px] truncate">{card.sourceItemTitle}</p>
-              </div>
-            )}
           </div>
         )}
         </div>
-        {/* Градиенты-подсказки «есть что проскроллить» — поверх верха и
-            низа скролл-зоны, не самой карточки, поэтому не перекрывают
-            заголовок выше и кнопки Принять/Отклонить ниже. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-card to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-card to-transparent" />
+        {/* Чевроны вместо градиентов — показывают, что есть что проскроллить,
+            и сами скроллят по клику на высоту видимой области; колесо мыши
+            продолжает работать как обычно. Видны только когда реально есть
+            куда скроллить в эту сторону. */}
+        {canScrollUp && (
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => scrollByPage(-1)}
+            className="absolute left-1/2 top-0 -translate-x-1/2 rounded-full dark:hover:bg-input/60 dark:hover:text-foreground"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        {canScrollDown && (
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => scrollByPage(1)}
+            className="absolute left-1/2 bottom-0 -translate-x-1/2 rounded-full dark:hover:bg-input/60 dark:hover:text-foreground"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        )}
         </div>
 
         {/* Единая нижняя группа (одна mt-auto на весь блок, а не на каждый
@@ -510,9 +636,44 @@ export function DashboardCard({
         <div className="mt-auto flex flex-col gap-2 pt-2">
             {!resolved && (
             <div className="flex gap-2">
-            {/* "Принять" opens the New Task dialog prefilled from this card.
-                The card is marked accepted only once the task is actually
-                created (onSuccess → handleAccept); cancelling leaves it open. */}
+            {/* new_order cards swap "Принять" for "Создать заказ" in the
+                exact same slot — the one recommendation on a new_order card
+                IS "create the order", so a generic task made no sense there,
+                and a THIRD button living inside the Рекомендация block (the
+                earlier approach) looked bolted-on next to this row. One
+                slot, one action per category, same visual rhythm either way. */}
+            {card.category === "new_order" ? (
+              onCreateOrder ? (
+                // Opens the New Order dialog right on the dashboard,
+                // prefilled with the linked client + the verbatim client
+                // message (message.orderRequest) — see dashboard/page.tsx.
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25"
+                  disabled={isPending}
+                  onClick={() => onCreateOrder(card)}
+                >
+                  <ShoppingCart className="h-4 w-4 mr-1" />
+                  Создать заказ
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25"
+                >
+                  {/* Fallback when no onCreateOrder is wired: hands the card
+                      off to /products, where the New Order dialog opens
+                      prefilled the same way. */}
+                  <Link href={`/products?orderFromCard=${card.id}`}>
+                    <ShoppingCart className="h-4 w-4 mr-1" />
+                    Создать заказ
+                  </Link>
+                </Button>
+              )
+            ) : (
             <TaskEditDialog
               mode="create"
               initialValues={taskInitialValues}
@@ -536,6 +697,7 @@ export function DashboardCard({
                 </Button>
               }
             />
+            )}
             <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
               <DialogTrigger asChild>
                 <Button
@@ -582,9 +744,49 @@ export function DashboardCard({
             </Dialog>
             </div>
             )}
+            {/* Куда ведёт принятие рекомендации — задача или заказ, смотря
+                что реально создалось (см. handleAccept / onCreateOrder выше,
+                resultTaskId/resultOrderId стамповаются в момент создания). */}
+            {resolved && (card.resultTaskId || card.resultOrderId) && (
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+              >
+                {card.resultTaskId ? (
+                  <Link href={`/tasks?openTask=${card.resultTaskId}`}>
+                    <ListTodo className="h-4 w-4 mr-1" />
+                    Открыть задачу
+                  </Link>
+                ) : (
+                  <Link href={`/products?openOrder=${card.resultOrderId}`}>
+                    <ShoppingCart className="h-4 w-4 mr-1" />
+                    Открыть заказ
+                  </Link>
+                )}
+              </Button>
+            )}
 
         </div>
       </CardContent>
+      <SourceMessageDialog
+        itemId={sourceOpen ? card.sourceItemId : null}
+        title={card.sourceItemTitle ?? "Источник"}
+        open={sourceOpen}
+        onOpenChange={setSourceOpen}
+        channel={sourceChannel}
+        from={card.sourceSender}
+        to={card.sourceRecipients}
+        date={
+          card.sourceCreatedAt
+            ? new Date(card.sourceCreatedAt).toLocaleString("ru-RU", {
+                dateStyle: "long",
+                timeStyle: "short",
+              })
+            : null
+        }
+      />
     </Card>
   )
 }

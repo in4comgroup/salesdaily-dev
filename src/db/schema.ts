@@ -687,6 +687,20 @@ export const dealFunnelStage = pgTable(
       { onDelete: "cascade" },
     ),
     isActive: boolean("is_active").notNull().default(true),
+    // «Область 0» перед воронкой (контакт до запроса — холодные знакомства,
+    // которые ведёт маркетинг): колонка на доске есть, но это ещё не стадия
+    // сделки — бледная, вне прогноза (closureProbability = 0), и при этом
+    // НЕ терминальная (вероятность 0 у обычной стадии значит «Rejected»).
+    // Миграция: scripts/add-funnel-stage-pre-pipeline.ts.
+    isPrePipeline: boolean("is_pre_pipeline").notNull().default(false),
+    // Настройки стадии из диалога «Настройки стадий» на /deals. displayName —
+    // то, что видит пользователь (null → русская подпись по `name`, см.
+    // dealStageLabel); `name` НЕ переименовывается: по нему определяются
+    // цвета колонок и терминальные Closed/Rejected. isHidden — колонка
+    // скрыта с доски (сделки в ней тоже не показываются).
+    // Миграция: scripts/add-funnel-stage-settings.ts.
+    displayName: text("display_name"),
+    isHidden: boolean("is_hidden").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -878,6 +892,21 @@ export const card = pgTable(
     ruleId: text("rule_id").references(() => rule.id, {
       onDelete: "set null",
     }),
+    // What accepting this card's recommendation actually created — stamped
+    // at acceptance time by the two flows that can produce a durable row:
+    // the generic "Принять" → create-task dialog (resultTaskId) and the
+    // new_order "Создать заказ" flow once a real order is minted
+    // (resultOrderId, from either order-builder.tsx's persist() or
+    // products/page.tsx's startAssembly — see dashboard-card.tsx's
+    // handleAccept). At most one is ever set per card (a card has exactly
+    // one recommendation). ON DELETE SET NULL — a later hard-delete of the
+    // task/order shouldn't take the card's own accept/reject history with it.
+    resultTaskId: text("result_task_id").references(() => task.id, {
+      onDelete: "set null",
+    }),
+    resultOrderId: text("result_order_id").references(() => order.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -891,6 +920,8 @@ export const card = pgTable(
     index("card_accepted_idx").on(table.accepted),
     index("card_sourceItemId_idx").on(table.sourceItemId),
     index("card_ruleId_idx").on(table.ruleId),
+    index("card_resultTaskId_idx").on(table.resultTaskId),
+    index("card_resultOrderId_idx").on(table.resultOrderId),
   ],
 )
 
