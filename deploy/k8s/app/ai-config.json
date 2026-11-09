@@ -5,9 +5,35 @@
       "yandex"
     ],
     "features": {
-      "webSearch": false,
+      "webSearch": true,
       "websiteFetch": false,
-      "browserSpeechRecognition": false
+      "browserSpeechRecognition": false,
+      "serverSpeechRecognition": true
+    }
+  },
+  "preprocessing": {
+    "images": "vision",
+    "pdf": "ocr",
+    "audio": "speechkit",
+    "video": "disabled",
+    "maxMediaSeconds": 180,
+    "pdfMaxPages": 10
+  },
+  "services": {
+    "ocr": {
+      "enabled": true,
+      "connectionId": "yandex",
+      "credentialsEnv": "YANDEX_OCR_API_KEY"
+    },
+    "speech": {
+      "enabled": true,
+      "connectionId": "yandex",
+      "credentialsEnv": "YANDEX_SPEECH_API_KEY"
+    },
+    "search": {
+      "enabled": true,
+      "connectionId": "yandex",
+      "credentialsEnv": "YANDEX_SEARCH_API_KEY"
     }
   },
   "connections": {
@@ -31,114 +57,153 @@
         "tools",
         "streaming"
       ]
+    },
+    "yandex-vision": {
+      "enabled": true,
+      "label": "Yandex Vision",
+      "connectionId": "yandex",
+      "upstreamModelIdEnv": "YANDEX_AI_VISION_MODEL_URI",
+      "capabilities": [
+        "text",
+        "image"
+      ]
     }
   },
   "tasks": {
     "chat": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "analytics": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "cards": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "deals": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "orderRequest": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "chatSummary": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "companyResearch": {
-      "enabled": false,
-      "allowedModels": [],
+      "enabled": true,
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
       "fallbackModels": []
     },
     "companyExtraction": {
-      "enabled": false,
-      "allowedModels": [],
+      "enabled": true,
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
       "fallbackModels": []
     },
     "parseText": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "parsePdf": {
-      "enabled": false,
-      "allowedModels": [],
+      "enabled": true,
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
       "fallbackModels": []
     },
     "parseImage": {
-      "enabled": false,
-      "allowedModels": [],
+      "enabled": true,
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
       "fallbackModels": []
     },
     "parseAudio": {
-      "enabled": false,
-      "allowedModels": [],
+      "enabled": true,
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
       "fallbackModels": []
     },
     "parseVideo": {
       "enabled": false,
-      "allowedModels": [],
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
       "fallbackModels": []
     },
     "parseOffice": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "orgAttribution": {
       "enabled": true,
+      "defaultModel": "yandex-text",
       "allowedModels": [
         "yandex-text"
       ],
-      "fallbackModels": [],
-      "defaultModel": "yandex-text"
+      "fallbackModels": []
     },
     "webSearch": {
-      "enabled": false,
-      "allowedModels": [],
+      "enabled": true,
+      "defaultModel": "yandex-text",
+      "allowedModels": [
+        "yandex-text"
+      ],
+      "fallbackModels": []
+    },
+    "describeImage": {
+      "enabled": true,
+      "defaultModel": "yandex-vision",
+      "allowedModels": [
+        "yandex-vision"
+      ],
       "fallbackModels": []
     }
   }

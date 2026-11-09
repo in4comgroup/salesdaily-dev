@@ -1,6 +1,7 @@
 import "server-only"
 import { generateText, Output } from "ai"
 import { getAiRuntime } from "@/server/ai"
+import { prepareMediaInput } from "@/server/ai/media"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -106,8 +107,8 @@ export type ParsedImage = {
  * owns fetching bytes and deciding on source identifiers.
  *
  * Handles both photo-style images (via description) and text-heavy images
- * (via OCR) in a single Gemini 2.5 Flash multimodal call — the model picks
- * the right strategy per-image based on what it sees.
+ * (via OCR). Configuration selects native multimodal input or vision
+ * transcription followed by a separate structured text call.
  */
 export async function parseImageBytes(
   input: ImageParseInput,
@@ -126,8 +127,10 @@ export async function parseImageBytes(
   }
 
   const aiRoute = getAiRuntime().resolve({ task: "parseImage" })
+  const prepared = await prepareMediaInput("parseImage", bytes, fileName, mediaType)
   const { output: analysis } = await generateText({
     model: aiRoute.model,
+    ...(prepared.preprocessingModel ? { maxRetries: 0, abortSignal: AbortSignal.timeout(60_000) } : {}),
     output: Output.object({ schema: imageAnalysisSchema }),
     system: `You are a precise image parsing assistant. Extract structured metadata and convert the provided image into clean Markdown. For text-heavy images perform OCR faithfully; for photos/diagrams give a detailed description. Never fabricate facts that are not visible in the image.
 
@@ -137,18 +140,7 @@ For images specifically: the 'author/sender' is whoever you extract into the \`s
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Filename: ${fileName}\n\nExtract the structured metadata and convert the attached image into clean markdown per the schema.`,
-          },
-          {
-            type: "file",
-            mediaType,
-            data: bytes,
-            filename: fileName,
-          },
-        ],
+        content: prepared.content,
       },
     ],
   })
@@ -189,7 +181,7 @@ For images specifically: the 'author/sender' is whoever you extract into the \`s
       byteSize: bytes.byteLength,
     },
     analysis: {
-      parserModel: aiRoute.upstreamModelId,
+      parserModel: [prepared.preprocessingModel, aiRoute.upstreamModelId].filter(Boolean).join(" → "),
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),

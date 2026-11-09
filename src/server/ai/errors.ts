@@ -1,3 +1,4 @@
+import { AiServiceError } from "./services"
 import "server-only"
 
 import { AiConfigurationError } from "./config"
@@ -53,6 +54,15 @@ export class AiProviderError extends Error {
   }
 }
 
+export class AiMediaError extends Error {
+  constructor(reason: "incomplete-vision") {
+    super(reason === "incomplete-vision"
+      ? "Vision returned empty or truncated content; document was not accepted. Check image density and model output limits."
+      : "Media processing failed.")
+    this.name = "AiMediaError"
+  }
+}
+
 export class AiProbeError extends Error {
   constructor(reason: "empty-response" | "unexpected-structured-response" | "tool-loop-incomplete") {
     const messages = {
@@ -66,7 +76,7 @@ export class AiProbeError extends Error {
 }
 
 export function formatAiCheckError(error: unknown): string {
-  if (error instanceof AiConfigurationError || error instanceof AiPolicyError || error instanceof AiProbeError) {
+  if (error instanceof AiConfigurationError || error instanceof AiPolicyError || error instanceof AiProbeError || error instanceof AiMediaError || error instanceof AiServiceError) {
     return error.message
   }
   const metadata = error instanceof AiProviderError ? error : failureMetadata(error)

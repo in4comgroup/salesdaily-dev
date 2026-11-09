@@ -9,6 +9,8 @@ import { authorizeAiModel, assertAiFeatureAllowed } from "./policy"
 import { listAvailableAiModels, requiredTaskCapabilities } from "./registry"
 import { createVercelGatewayAdapter } from "./adapters/vercel-gateway"
 import { createYandexAdapter } from "./adapters/yandex"
+import { createYandexService, type ServiceName, type YandexService } from "./services"
+import { AiPolicyError } from "./policy"
 import type { AiDiagnostics } from "./diagnostics"
 
 export function createAiRuntime(
@@ -23,13 +25,22 @@ export function createAiRuntime(
 
   // Credentials are required only for active, policy-approved connections.
   // Constructing adapters does not issue network requests.
-  const adapters = new Map<string, (modelId: string) => Exclude<LanguageModel, string>>()
+  const adapters = new Map<string, (modelId: string, allowImages?: boolean) => Exclude<LanguageModel, string>>()
   for (const [id, connection] of Object.entries(config.connections)) {
     if (connection.enabled && config.policy.allowedConnections.includes(id)) {
       adapters.set(id, connection.adapter === "vercel-gateway"
         ? createVercelGatewayAdapter(connection, environment, fetchImplementation)
         : createYandexAdapter(connection, environment, fetchImplementation, diagnostics))
     }
+  }
+
+  const services = new Map<ServiceName, YandexService>()
+  for (const name of ["speech", "search", "ocr"] as const) {
+    const service = config.services[name]
+    if (!service.enabled) continue
+    const connection = config.connections[service.connectionId!]
+    if (connection.adapter !== "yandex-openai-compatible") throw new AiConfigurationError("Yandex service requires a Yandex connection")
+    services.set(name, createYandexService(name, service.credentialsEnv!, connection.folderIdEnv, environment, fetchImplementation))
   }
 
   const modelIds = new Map<string, string>()
@@ -40,22 +51,29 @@ export function createAiRuntime(
     if (!upstreamId) throw new AiConfigurationError("Missing upstream model environment variable")
     const connection = config.connections[model.connectionId]
     if (connection.adapter === "yandex-openai-compatible" &&
-        model.capabilities.some((c) => ["image", "pdf", "audio", "video", "googleSearch"].includes(c))) {
-      throw new AiConfigurationError("Yandex adapter currently supports text tasks only")
+        model.capabilities.some((c) => ["pdf", "audio", "video", "googleSearch"].includes(c))) {
+      throw new AiConfigurationError("Yandex adapter supports text and inline images only")
     }
     // Validate model URI before any call; adapters only construct objects here.
-    adapters.get(model.connectionId)!(upstreamId)
+    adapters.get(model.connectionId)!(upstreamId, model.capabilities.includes("image"))
     modelIds.set(id, upstreamId)
   }
 
   // Validate baseline capability requirements before accepting this runtime.
   for (const [task, definition] of Object.entries(config.tasks)) {
     if (definition.enabled) {
-      authorizeAiModel(config, task as AiTask, undefined, requiredTaskCapabilities(task as AiTask))
+      authorizeAiModel(config, task as AiTask, undefined, requiredTaskCapabilities(task as AiTask, config))
     }
   }
 
   return {
+    hasService(name: ServiceName) { return services.has(name) },
+    service(name: ServiceName) {
+      const service = services.get(name)
+      if (!service) throw new AiPolicyError(`AI service is disabled: ${name}`)
+      return service
+    },
+    preprocessing() { return { ...config.preprocessing } },
     listModels(task: AiTask) { return listAvailableAiModels(config, task) },
     assertFeatureAllowed(feature: AiFeature) { assertAiFeatureAllowed(config, feature) },
     isFeatureAllowed(feature: AiFeature) { return config.policy.features[feature] === true },
@@ -71,12 +89,12 @@ export function createAiRuntime(
     },
     resolve(request: { task: AiTask; modelId?: string; requiredCapabilities?: readonly AiCapability[] }) {
       const route = authorizeAiModel(config, request.task, request.modelId, [
-        ...requiredTaskCapabilities(request.task), ...(request.requiredCapabilities ?? []),
+        ...requiredTaskCapabilities(request.task, config), ...(request.requiredCapabilities ?? []),
       ])
       const adapter = adapters.get(route.definition.connectionId)
       if (!adapter) throw new AiConfigurationError("AI adapter is unavailable")
       const upstreamModelId = modelIds.get(route.modelId)!
-      const model: Exclude<LanguageModel, string> = adapter(upstreamModelId)
+      const model: Exclude<LanguageModel, string> = adapter(upstreamModelId, route.definition.capabilities.includes("image"))
       return {
         model,
         task: request.task,

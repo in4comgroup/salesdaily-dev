@@ -1,3 +1,5 @@
+import { prepareMediaInput } from "../../src/server/ai/media"
+import { syntheticPng, syntheticPdf } from "./synthetic-media"
 import { parseArgs } from "node:util"
 import { generateText, streamText, Output, tool, stepCountIs } from "ai"
 import { z } from "zod"
@@ -28,16 +30,33 @@ async function main() {
     const models = runtime.listModels(task)
     console.log(`${task}: ${models.length ? models.map((m) => `${m.id}${m.isDefault ? " (default)" : ""}`).join(", ") : "disabled"}`)
   }
+  console.log(`Services: speech=${runtime.hasService("speech")}, search=${runtime.hasService("search")}, ocr=${runtime.hasService("ocr")}`)
   if (values.model && !values.probe) throw new AiConfigurationError("--model requires --probe")
   if (!values.probe) return
   if (!AI_TASKS.includes(values.probe as AiTask)) throw new AiConfigurationError("Unknown --probe task")
   const mode = values.mode
-  if (!["text", "structured", "tools", "stream"].includes(mode!)) throw new AiConfigurationError("Unknown --mode")
+  if (!["text", "structured", "tools", "stream", "image", "pdf"].includes(mode!)) throw new AiConfigurationError("Unknown --mode")
   const route = runtime.resolve({
     task: values.probe as AiTask, modelId: values.model,
     requiredCapabilities: mode === "structured" ? ["structuredOutput"] : mode === "tools" ? ["tools"] : mode === "stream" ? ["streaming"] : ["text"],
   })
-  console.log(`Synthetic text probe: ${route.task} → ${route.connectionId} / ${route.modelId}`)
+  console.log(`Synthetic ${mode} probe: ${route.task} → ${route.connectionId} / ${route.modelId}`)
+  if (mode === "image" || mode === "pdf") {
+    const task = mode === "image" ? "parseImage" : "parsePdf"
+    if (values.probe !== task || values.model) throw new AiConfigurationError("Media probe requires its matching parse task and configured default models")
+    const prepared = await prepareMediaInput(task, mode === "image" ? syntheticPng() : syntheticPdf(),
+      mode === "image" ? "synthetic.png" : "synthetic.pdf", mode === "image" ? "image/png" : "application/pdf", runtime)
+    const result = await generateText({
+      model: route.model, maxRetries: 0, maxOutputTokens: 512,
+      abortSignal: AbortSignal.timeout(30_000),
+      system: "Return a short summary of the synthetic source content in the supplied schema.",
+      messages: [{ role: "user", content: prepared.content }],
+      output: Output.object({ schema: z.object({ summary: z.string().min(1) }) }),
+    })
+    if (!result.output.summary.trim() || result.finishReason === "length") throw new AiProbeError("empty-response")
+    console.log(`Probe succeeded (${mode}; preprocessing and structured summary).`)
+    return
+  }
   // This is an opt-in billable text connectivity test, not a quality or
   // multimodal acceptance test. Never read CRM data or files here.
   const common = {

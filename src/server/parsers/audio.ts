@@ -1,6 +1,7 @@
 import "server-only"
 import { generateText, Output } from "ai"
 import { getAiRuntime } from "@/server/ai"
+import { prepareAvInput } from "@/server/ai/av"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -108,7 +109,7 @@ export type ParsedAudio = {
     mediaType: string
     byteSize: number
     durationSeconds: number
-    speakerCount: number
+    speakerCount: number | null
   }
   analysis: MetadataAnalysis
 }
@@ -139,8 +140,10 @@ export async function parseAudioBytes(
   const modelMediaType = resolveModelMediaType(mediaType, fileName)
 
   const aiRoute = getAiRuntime().resolve({ task: "parseAudio" })
+  const prepared = await prepareAvInput("parseAudio", bytes, fileName, modelMediaType)
   const { output: analysis } = await generateText({
     model: aiRoute.model,
+    ...(prepared.durationSeconds !== undefined ? { maxRetries: 0, abortSignal: AbortSignal.timeout(60_000) } : {}),
     output: Output.object({ schema: audioAnalysisSchema }),
     system: `You are a precise audio parsing assistant. Transcribe the provided recording faithfully, diarise it by speaker, and extract structured metadata. Keep speaker labels stable across segments. Do not invent content that is not present in the audio.
 
@@ -150,18 +153,7 @@ For audio specifically: the 'author/sender' is each of the SPEAKERS — don't in
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Filename: ${fileName}\n\nTranscribe the attached audio into speaker-separated segments with accurate timestamps, and extract the structured metadata per the schema. If speakers can be identified by name from the audio itself, use those names as labels; otherwise use 'Speaker 1', 'Speaker 2', etc. — keep a label consistent for the same voice across segments.`,
-          },
-          {
-            type: "file",
-            mediaType: modelMediaType,
-            data: bytes,
-            filename: fileName,
-          },
-        ],
+        content: prepared.content,
       },
     ],
   })
@@ -169,13 +161,15 @@ For audio specifically: the 'author/sender' is each of the SPEAKERS — don't in
   // Clean speaker labels + segments server-side so frontmatter and the
   // rendered transcript stay consistent if the model returned slight
   // variations (e.g. "Speaker 1" in segments, "speaker 1" in speakers list).
-  const segments = analysis.segments.map((s) => ({
+  if (prepared.durationSeconds !== undefined) analysis.durationSeconds = prepared.durationSeconds
+  const segments = (prepared.segments ?? analysis.segments).map((s) => ({
     ...s,
     speaker: s.speaker.trim() || "Unknown",
     transcript: s.transcript.trim(),
   }))
   const speakers = uniqueStrings(
-    segments.length > 0 ? segments.map((s) => s.speaker) : analysis.speakers,
+    prepared.segments !== undefined ? segments.map((s) => s.speaker).filter((speaker) => speaker !== "Unknown") :
+      segments.length > 0 ? segments.map((s) => s.speaker) : analysis.speakers,
   )
 
   const nowIso = new Date().toISOString()
@@ -229,10 +223,10 @@ For audio specifically: the 'author/sender' is each of the SPEAKERS — don't in
       mediaType,
       byteSize: bytes.byteLength,
       durationSeconds: analysis.durationSeconds,
-      speakerCount: speakers.length,
+      speakerCount: prepared.segments !== undefined && segments.length > 0 ? null : speakers.length,
     },
     analysis: {
-      parserModel: aiRoute.upstreamModelId,
+      parserModel: [prepared.preprocessingModel, aiRoute.upstreamModelId].filter(Boolean).join(" → "),
       language: analysis.language || "en",
       summary: analysis.summary,
       mentions: uniqueStrings(analysis.mentions),
@@ -258,7 +252,7 @@ export function renderTranscript(args: {
   const { durationSeconds, segments } = args
   const lines: string[] = []
   lines.push(
-    `**Total duration:** ${formatTimestamp(durationSeconds)} · **Speakers:** ${uniqueStrings(segments.map((s) => s.speaker)).length}`,
+    `**Total duration:** ${formatTimestamp(durationSeconds)} · **Speakers:** ${segments.some((s) => s.speaker === "Unknown") ? "not identified" : uniqueStrings(segments.map((s) => s.speaker)).length}`,
   )
   lines.push("")
 

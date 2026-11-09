@@ -56,7 +56,7 @@ export function createYandexAdapter(
     },
   })
 
-  return (modelId: string) => {
+  return (modelId: string, allowImages = false) => {
     if (!modelId.startsWith(`gpt://${folderId}/`) || !/^gpt:\/\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9._/-]+$/.test(modelId)) {
       throw new AiConfigurationError("Yandex model URI must belong to the configured folder")
     }
@@ -64,13 +64,19 @@ export function createYandexAdapter(
       model: provider.chatModel(modelId),
       middleware: {
         specificationVersion: "v3",
-        // Avoid SDK downloads before validation. URLs stay as references and
-        // all file/image inputs are then rejected by the text-only adapter.
+        // Prevent SDK fetching arbitrary remote file URLs before validation.
         overrideSupportedUrls: () => ({ "*/*": [/.*/] }),
         transformParams: async ({ params }) => {
-          if (params.prompt.some((message) => Array.isArray(message.content) &&
-              message.content.some((part) => part.type === "file"))) {
-            throw new AiPolicyError("Yandex adapter currently accepts text inputs only")
+          for (const message of params.prompt) {
+            if (!Array.isArray(message.content)) continue
+            for (const part of message.content) {
+              if (part.type !== "file") continue
+              if (!allowImages || !(part.data instanceof Uint8Array) ||
+                  !["image/png", "image/jpeg"].includes(part.mediaType) ||
+                  part.data.byteLength > 10 * 1024 * 1024) {
+                throw new AiPolicyError("Yandex accepts only explicitly enabled inline PNG/JPEG images up to 10 MiB")
+              }
+            }
           }
           return params
         },

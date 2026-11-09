@@ -6,7 +6,7 @@
 #
 # Deliberately NOT cluster-admin: the token lives in GitHub, so it can only
 # touch what `kubectl apply -k deploy/k8s/app` manages — the app's
-# Deployment / Service / Ingress / CronJob in `salesdaily` — and read pods for
+# Deployment / Service / Ingress / CronJob / AI ConfigMap in `salesdaily` — and read pods for
 # `rollout status`. No delete, no Secrets, nothing outside the namespace
 # (above all not Service traefik/traefik, which holds the public IP).
 apiVersion: v1
@@ -46,6 +46,17 @@ rules:
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get", "list", "create", "update", "patch"]
+  # kubectl apply reads the existing object, then patches it. Access to
+  # existing ConfigMaps is limited to the app's non-secret AI configuration.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["crm-ai-config"]
+    verbs: ["get", "update", "patch"]
+  # Kubernetes cannot restrict top-level create by resourceNames. This
+  # namespace-scoped permission is needed for the first app deployment.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list", "create", "update", "patch"]

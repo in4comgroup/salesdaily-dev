@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url"
 const require = createRequire(import.meta.url)
 
 const [command, ...args] = process.argv.slice(2)
-if (command !== "check" && command !== "test") {
-  console.error("Usage: node tools/ai/run.mjs check [--config path] [--probe task] [--model id] [--debug] | test")
+if (command !== "check" && command !== "test" && command !== "profile") {
+  console.error("Usage: node tools/ai/run.mjs check [--config path] [--probe task] [--model id] [--debug] | test | profile --output path --enable images,pdf,audio,search,voice")
   process.exitCode = 1
 } else {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
@@ -22,7 +22,7 @@ if (command !== "check" && command !== "test") {
       "--target", "es2022", "--module", "commonjs", "--moduleResolution", "node",
       "--skipLibCheck", "--strict", "--esModuleInterop", "--rootDir", root,
       "--outDir", output, "--pretty", "false",
-      "src/server/ai/index.ts", "tools/ai/check.ts", "tools/ai/runtime.test.ts",
+      "src/server/ai/index.ts", "tools/ai/check.ts", "tools/ai/runtime.test.ts", "tools/ai/profile.ts",
     ], { cwd: root, stdio: "inherit" })
     if (compilation.error || compilation.status !== 0) {
       console.error("AI tooling compilation failed")
@@ -30,7 +30,7 @@ if (command !== "check" && command !== "test") {
     } else {
       const result = spawnSync(process.execPath, [
         "--conditions=react-server",
-        path.join(output, "tools/ai", command === "test" ? "runtime.test.js" : "check.js"),
+        path.join(output, "tools/ai", command === "test" ? "runtime.test.js" : command === "profile" ? "profile.js" : "check.js"),
         ...args,
       ], {
         cwd: root,

@@ -5,6 +5,7 @@ import "server-only"
 import { generateText, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 
+import { researchYandex } from "@/server/ai/search"
 import { getAiRuntime } from "@/server/ai"
 
 // ── Web search as an explicit tool, not a passthrough ────────────────
@@ -65,6 +66,10 @@ export async function searchWeb(query: string): Promise<WebSearchResult> {
   }
 
   try {
+    if (getAiRuntime().hasService("search")) {
+      const research = await researchYandex(q, "webSearch")
+      return { query: q, findings: research.text, sources: research.sources, grounded: research.grounded }
+    }
     const research = await generateText({
       model: getAiRuntime().resolveGoogleSearch("webSearch"),
       system: RESEARCH_SYSTEM,

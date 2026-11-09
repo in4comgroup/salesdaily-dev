@@ -1,5 +1,7 @@
 "use server"
 
+import { researchYandex } from "@/server/ai/search"
+
 import { db } from "@/db/drizzle"
 import {
   client,
@@ -908,7 +910,7 @@ export async function lookupClientOnWeb(
   const target = await assertClientInOrg(clientId, activeOrgId)
 
   const ai = getAiRuntime()
-  const researchModel = ai.resolveGoogleSearch("companyResearch")
+  const researchModel = ai.hasService("search") ? ai.resolve({ task: "companyResearch" }).model : ai.resolveGoogleSearch("companyResearch")
   const extractionModel = ai.resolve({ task: "companyExtraction" }).model
 
   // Pull active contacts for extra disambiguation context (their names +
@@ -1021,7 +1023,9 @@ Write 2–4 short paragraphs of research notes summarising what you found. If mu
     ? fetchSiteTextForLookup(knownUrl)
     : Promise.resolve("")
 
-  const research = await generateText({
+  const research = ai.hasService("search")
+    ? await researchYandex([effective.name, knownUrl, "контакты официальный сайт"].filter(Boolean).join(" ").slice(0, 400), "companyResearch", researchPrompt)
+    : await generateText({
     model: researchModel,
     system:
       "You are a precise company-research assistant. Use the google_search tool to find authoritative information about the given company. Prefer official websites, LinkedIn company pages, and corporate registries over social media or aggregators. Never invent details — if a field can't be confirmed by the search results, say so explicitly.",

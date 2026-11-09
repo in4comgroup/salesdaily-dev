@@ -1,6 +1,7 @@
 import "server-only"
 import { generateText, Output } from "ai"
 import { getAiRuntime } from "@/server/ai"
+import { prepareAvInput } from "@/server/ai/av"
 import { z } from "zod"
 import { PARSER_CONFIG } from "@/lib/parser-config"
 import {
@@ -118,7 +119,7 @@ export type ParsedVideo = {
     mediaType: string
     byteSize: number
     durationSeconds: number
-    speakerCount: number
+    speakerCount: number | null
   }
   // Per-block analysis. mentions/companies/products/language are shared
   // (the LLM produces them across audio + visual jointly), but summary
@@ -153,8 +154,10 @@ export async function parseVideoBytes(
   }
 
   const aiRoute = getAiRuntime().resolve({ task: "parseVideo" })
+  const prepared = await prepareAvInput("parseVideo", bytes, fileName, mediaType)
   const { output: analysis } = await generateText({
     model: aiRoute.model,
+    ...(prepared.durationSeconds !== undefined ? { maxRetries: 0, abortSignal: AbortSignal.timeout(60_000) } : {}),
     output: Output.object({ schema: videoAnalysisSchema }),
     system: `You are a precise video parsing assistant. Analyse the provided video both visually and aurally. Produce a faithful visual description AND a faithful diarised transcript of any speech. Extract structured metadata. Never fabricate facts that are not present in the video.
 
@@ -164,29 +167,20 @@ For video specifically: the 'author/sender' is each of the SPEAKERS — don't in
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Filename: ${fileName}\n\nAnalyse the attached video and return the structured fields per the schema. The video block fields (videoSummary, videoContent) describe the visual content; the audio block fields (audioSummary, segments, speakers) transcribe the audio track with speaker diarisation and timestamps. If there's no speech, return empty audioSummary, empty segments, empty speakers. Keep speaker labels stable across segments.`,
-          },
-          {
-            type: "file",
-            mediaType,
-            data: bytes,
-            filename: fileName,
-          },
-        ],
+        content: prepared.content,
       },
     ],
   })
 
-  const segments = analysis.segments.map((s) => ({
+  if (prepared.durationSeconds !== undefined) analysis.durationSeconds = prepared.durationSeconds
+  const segments = (prepared.segments ?? analysis.segments).map((s) => ({
     ...s,
     speaker: s.speaker.trim() || "Unknown",
     transcript: s.transcript.trim(),
   }))
   const speakers = uniqueStrings(
-    segments.length > 0 ? segments.map((s) => s.speaker) : analysis.speakers,
+    prepared.segments !== undefined ? segments.map((s) => s.speaker).filter((speaker) => speaker !== "Unknown") :
+      segments.length > 0 ? segments.map((s) => s.speaker) : analysis.speakers,
   )
 
   const nowIso = new Date().toISOString()
@@ -250,7 +244,7 @@ For video specifically: the 'author/sender' is each of the SPEAKERS — don't in
   )
 
   const sharedFields = {
-    parserModel: aiRoute.upstreamModelId,
+    parserModel: [prepared.preprocessingModel, aiRoute.upstreamModelId].filter(Boolean).join(" → "),
     language: analysis.language || "en",
     mentions: uniqueStrings(analysis.mentions),
     companies: uniqueStrings(analysis.companies),
@@ -271,7 +265,7 @@ For video specifically: the 'author/sender' is each of the SPEAKERS — don't in
       mediaType,
       byteSize: bytes.byteLength,
       durationSeconds: analysis.durationSeconds,
-      speakerCount: speakers.length,
+      speakerCount: prepared.segments !== undefined && segments.length > 0 ? null : speakers.length,
     },
     videoAnalysis: { ...sharedFields, summary: analysis.videoSummary },
     audioAnalysis: { ...sharedFields, summary: audioSummary },

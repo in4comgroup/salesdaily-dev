@@ -53,6 +53,7 @@ import {
   PromptInputSubmit,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input"
+import { ServerSpeechInput } from "@/components/blocks/server-speech-input"
 import { SpeechInput } from "@/components/ai-elements/speech-input"
 import { Shimmer } from "@/components/ai-elements/shimmer"
 import {
@@ -341,7 +342,8 @@ export function AIChat({ className }: { className?: string }) {
                   <PromptInputActionAddAttachments />
                 </PromptInputActionMenuContent>
               </PromptInputActionMenu>}
-              {ai.features?.browserSpeechRecognition && <SpeechInput
+              {ai.features?.serverSpeechRecognition && <ServerSpeechInput disabled={!ai.enabled} onTranscriptionChange={handleSpeechTranscription} />}
+              {!ai.features?.serverSpeechRecognition && ai.features?.browserSpeechRecognition && <SpeechInput
                 size="icon-sm"
                 variant="ghost"
                 onTranscriptionChange={handleSpeechTranscription}

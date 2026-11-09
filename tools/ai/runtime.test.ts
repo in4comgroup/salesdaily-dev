@@ -1,4 +1,13 @@
 import assert from "node:assert/strict"
+import { buildStage3Profile } from "./profile"
+import { recognizeSpeech, parseSpeechResult } from "../../src/server/ai/speech"
+import { recognizePdf, parseOcrResult } from "../../src/server/ai/ocr"
+import { encodeMonoWav } from "../../src/lib/pcm-wav"
+import { runInNewContext } from "node:vm"
+import { transcribeMedia, speechContainer, pcmWavDuration } from "../../src/server/ai/av"
+import { researchYandex, parseSearchXml } from "../../src/server/ai/search"
+import { AiServiceError, readBytesBounded } from "../../src/server/ai/services"
+import { prepareMediaInput, inlineImageType } from "../../src/server/ai/media"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 import { generateText, streamText, Output, tool, stepCountIs } from "ai"
@@ -6,7 +15,7 @@ import { z } from "zod"
 import { AiConfigurationError, loadAiConfig, parseAiConfig } from "../../src/server/ai/config"
 import { AiPolicyError, assertChatContentAllowed } from "../../src/server/ai/policy"
 import { createAiRuntime } from "../../src/server/ai/resolve"
-import { AiProviderError, AiProbeError, formatAiCheckError } from "../../src/server/ai/errors"
+import { AiProviderError, AiProbeError, AiMediaError, formatAiCheckError } from "../../src/server/ai/errors"
 import { redactDiagnosticBody, type AiDiagnosticEvent } from "../../src/server/ai/diagnostics"
 
 function legacy() {
@@ -404,4 +413,359 @@ test("invalid header characters in key fail before requests without echoing the 
     assert.throws(() => createAiRuntime(yandex(), { ...yandexEnv, YANDEX_AI_API_KEY: key }),
       (error: unknown) => error instanceof AiConfigurationError && !error.message.includes(key))
   }
+})
+
+function mediaProfile() {
+  const config = yandex()
+  config.models["yandex-vision"].enabled = true
+  config.services.ocr.enabled = true
+  for (const task of ["parseImage", "parsePdf", "describeImage"]) config.tasks[task].enabled = true
+  return config
+}
+const mediaEnv = { ...yandexEnv, YANDEX_AI_VISION_MODEL_URI: "gpt://test-folder/vision-test", YANDEX_OCR_API_KEY: "synthetic-ocr-key" }
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=", "base64")
+
+test("media profile requires an explicit vision route and preserves text-only profile defaults", () => {
+  assert.throws(() => createAiRuntime(mediaProfile(), yandexEnv), AiConfigurationError)
+  const config = mediaProfile()
+  config.tasks.describeImage.enabled = false
+  assert.throws(() => createAiRuntime(config, mediaEnv), AiConfigurationError)
+  assert.equal(createAiRuntime(yandex(), yandexEnv).preprocessing().images, "vision")
+  const runtime = createAiRuntime(mediaProfile(), mediaEnv)
+  assert.equal(runtime.resolve({ task: "parsePdf" }).modelId, "yandex-text")
+  assert.equal(runtime.resolve({ task: "describeImage" }).modelId, "yandex-vision")
+  for (const task of ["parseAudio", "parseVideo", "webSearch"] as const) {
+    assert.throws(() => runtime.resolve({ task }), AiPolicyError)
+  }
+  const copy = runtime.preprocessing()
+  copy.pdfMaxPages = 20
+  assert.equal(runtime.preprocessing().pdfMaxPages, 10)
+})
+
+test("image pipeline sends inline pixels only to vision, then text only to structured model", async () => {
+  const bodies: Record<string, unknown>[] = []
+  const runtime = createAiRuntime(mediaProfile(), mediaEnv, async (url, init) => {
+    assert.equal(String(url), "https://ai.api.cloud.yandex.net/v1/chat/completions")
+    const body = JSON.parse(String(init?.body))
+    bodies.push(body)
+    if (body.model === mediaEnv.YANDEX_AI_VISION_MODEL_URI) {
+      assert.equal(body.response_format, undefined)
+      assert.match(JSON.stringify(body.messages), /data:image\/png;base64,/)
+      return Response.json(completion("Synthetic readable image content"))
+    }
+    assert.equal(body.model, mediaEnv.YANDEX_AI_TEXT_MODEL_URI)
+    assert.equal(JSON.stringify(body.messages).includes("data:image/"), false)
+    return Response.json(completion('{"ok":true}'))
+  })
+  const prepared = await prepareMediaInput("parseImage", png, "test.png", "image/png", runtime)
+  const result = await generateText({
+    model: runtime.resolve({ task: "parseImage" }).model,
+    messages: [{ role: "user", content: prepared.content }],
+    output: Output.object({ schema: z.object({ ok: z.boolean() }) }),
+  })
+  assert.equal(result.output.ok, true)
+  assert.equal(prepared.preprocessingModel, mediaEnv.YANDEX_AI_VISION_MODEL_URI)
+  assert.equal(bodies.length, 2)
+})
+
+test("vision never downloads remote files, accepts PDFs directly or falls back after failure", async () => {
+  let requests = 0
+  const runtime = createAiRuntime(mediaProfile(), mediaEnv, async () => { requests++; return new Response("failure", { status: 503 }) })
+  for (const data of [new URL("https://example.com/secret.png"), new URL("data:image/png;base64,AA==")]) {
+    await assert.rejects(generateText({
+      model: runtime.resolve({ task: "describeImage" }).model, maxRetries: 0,
+      messages: [{ role: "user", content: [{ type: "file", data, mediaType: "image/png" }] }],
+    }), AiPolicyError)
+  }
+  await assert.rejects(generateText({
+    model: runtime.resolve({ task: "describeImage" }).model, maxRetries: 0,
+    messages: [{ role: "user", content: [{ type: "file", data: Buffer.from("pdf"), mediaType: "application/pdf" }] }],
+  }), AiPolicyError)
+  assert.equal(requests, 0)
+  await assert.rejects(prepareMediaInput("parseImage", png, "test.png", "image/png", runtime), AiProviderError)
+  assert.equal(requests, 1)
+})
+
+test("disabled media tasks reject before preprocessing or network; invalid image bytes fail locally", async () => {
+  let requests = 0
+  const runtime = createAiRuntime(yandex(), yandexEnv, async () => { requests++; throw new Error("unexpected") })
+  await assert.rejects(prepareMediaInput("parseImage", png, "test.png", "image/png", runtime), AiPolicyError)
+  assert.throws(() => inlineImageType(Buffer.from("not an image")), AiPolicyError)
+  assert.throws(() => inlineImageType(Buffer.alloc(11 * 1024 * 1024)), AiPolicyError)
+  assert.equal(requests, 0)
+})
+
+test("media errors provide actionable safe CLI diagnostics", () => {
+  assert.match(formatAiCheckError(new AiMediaError("incomplete-vision")), /empty or truncated/)
+})
+
+const serviceEnv = { ...mediaEnv, YANDEX_SPEECH_API_KEY: "synthetic-speech-key", YANDEX_SEARCH_API_KEY: "synthetic-search-key" }
+function fullProfile() { return buildStage3Profile(yandex(), ["images", "pdf", "audio", "search", "voice"]) }
+const speechEvents = [
+  { result: { final: { alternatives: [{ text: "raw", words: [{ startTimeMs: "100", endTimeMs: "900" }] }], channelTag: "0" }, audioCursors: { finalIndex: "0", receivedDataMs: "2000" } } },
+  { result: { finalRefinement: { finalIndex: "0", normalizedText: { alternatives: [{ text: "Тестовый заказ 123", startTimeMs: "100", endTimeMs: "900" }], channelTag: "0" } } } },
+  { result: { statusCode: { codeType: "CLOSED" } } },
+]
+
+test("single Yandex profile explicitly enables selected dependencies and preserves safe defaults", () => {
+  const voiceOnly = buildStage3Profile(yandex(), ["voice"])
+  const runtime = createAiRuntime(voiceOnly, { ...yandexEnv, YANDEX_SPEECH_API_KEY: "synthetic" })
+  assert.equal(runtime.hasService("speech"), true)
+  assert.equal(runtime.hasService("search"), false)
+  assert.equal(runtime.isFeatureAllowed("serverSpeechRecognition"), true)
+  assert.throws(() => runtime.resolve({ task: "parseAudio" }), AiPolicyError)
+  const off = buildStage3Profile(fullProfile(), [])
+  assert.equal(off.models["yandex-vision"].enabled, false)
+  assert.doesNotThrow(() => createAiRuntime(off, yandexEnv))
+  assert.throws(() => buildStage3Profile(yandex(), ["typo"]), AiConfigurationError)
+  const config = fullProfile()
+  config.policy.allowedConnections = []
+  assert.throws(() => createAiRuntime(config, serviceEnv), AiConfigurationError)
+  assert.throws(() => createAiRuntime(fullProfile(), mediaEnv), AiConfigurationError)
+  assert.equal(fullProfile().policy.features.browserSpeechRecognition, false)
+  assert.equal(fullProfile().policy.features.websiteFetch, false)
+})
+
+test("SpeechKit uses fixed endpoints, dedicated auth, inline WAV, polls and deletes results", async () => {
+  const calls: string[] = []
+  const runtime = createAiRuntime(fullProfile(), serviceEnv, async (input, init) => {
+    const url = String(input)
+    calls.push(url)
+    assert.equal(init?.redirect, "error")
+    const headers = new Headers(init?.headers)
+    assert.equal(headers.get("authorization"), `Api-Key ${serviceEnv.YANDEX_SPEECH_API_KEY}`)
+    assert.equal(headers.get("x-folder-id"), "test-folder")
+    if (url.endsWith("recognizeFileAsync")) {
+      const body = JSON.parse(String(init?.body))
+      assert.equal(body.content, Buffer.from("RIFFsynthetic").toString("base64"))
+      assert.equal(body.uri, undefined)
+      assert.equal(body.recognitionModel.audioFormat.containerAudio.containerAudioType, "WAV")
+      return Response.json({ id: "test-operation" })
+    }
+    if (url.includes("operation.api.")) return Response.json({ done: calls.length > 2 })
+    if (url.includes("getRecognition")) return new Response(speechEvents.map((event) => JSON.stringify(event)).join("\n"))
+    assert.equal(init?.method, "DELETE")
+    return new Response("")
+  })
+  const result = await recognizeSpeech(Buffer.from("RIFFsynthetic"), runtime.service("speech"), AbortSignal.timeout(5000), async () => {})
+  assert.equal(result.durationSeconds, 2)
+  assert.deepEqual(result.segments, [{ startSeconds: 0.1, durationSeconds: 0.8, transcript: "Тестовый заказ 123", speaker: "Unknown" }])
+  assert.equal(calls.length, 5)
+  assert.match(calls.at(-1)!, /deleteRecognition\?operationId=test-operation$/)
+  assert.deepEqual(parseSpeechResult(JSON.stringify(speechEvents)), result.segments)
+})
+
+test("SpeechKit failures and cancellation still attempt cleanup; cleanup errors surface safely", async () => {
+  for (const failure of ["poll", "result", "delete", "abort"]) {
+    const calls: string[] = []
+    const controller = new AbortController()
+    const runtime = createAiRuntime(fullProfile(), serviceEnv, async (input) => {
+      const url = String(input)
+      calls.push(url)
+      if (url.endsWith("recognizeFileAsync")) {
+        if (failure === "abort") controller.abort()
+        return Response.json({ id: "test-operation" })
+      }
+      if (url.includes("operation.api.")) return failure === "poll" ? new Response("private raw response", { status: 403 }) : Response.json({ done: true })
+      if (url.includes("getRecognition")) return failure === "result" ? new Response("private raw response", { status: 500 }) : new Response("")
+      return failure === "delete" ? new Response("private raw response", { status: 403 }) : new Response("")
+    })
+    await assert.rejects(recognizeSpeech(Buffer.from("wav"), runtime.service("speech"), controller.signal, async () => {}), (error: unknown) => {
+      assert.ok(error instanceof AiServiceError)
+      assert.equal(String(error).includes("private raw response"), false)
+      if (failure === "delete") assert.match(error.message, /cleanup operation ID: test-operation/)
+      return true
+    })
+    assert.match(calls.at(-1)!, /deleteRecognition/)
+  }
+})
+
+test("bounded input reader stops oversized bodies and service denies cross-service operations", async () => {
+  await assert.rejects(readBytesBounded(new Response("too much data").body, 2))
+  const runtime = createAiRuntime(fullProfile(), serviceEnv, async () => { throw new Error("must not send") })
+  await assert.rejects(runtime.service("speech").request("search"), AiConfigurationError)
+  await assert.rejects(runtime.service("speech").request("poll", { id: "../../other" }), AiConfigurationError)
+  assert.throws(() => createAiRuntime(yandex(), yandexEnv).service("speech"), AiPolicyError)
+})
+
+const searchXml = '<yandexsearch><response><results><grouping><group><doc><url>https://example.org/company</url><title>Компания &amp; партнёры</title><passages><passage>Контакты <hlword>компании</hlword></passage></passages></doc></group></grouping></results></response></yandexsearch>'
+
+test("Yandex search parses XML without fetching URLs and summarizes only real returned sources", async () => {
+  const calls: string[] = []
+  const runtime = createAiRuntime(fullProfile(), serviceEnv, async (input, init) => {
+    const url = String(input)
+    calls.push(url)
+    const headers = new Headers(init?.headers)
+    if (url.includes("searchapi.")) {
+      assert.equal(headers.get("authorization"), `Api-Key ${serviceEnv.YANDEX_SEARCH_API_KEY}`)
+      const body = JSON.parse(String(init?.body))
+      assert.equal(body.folderId, "test-folder")
+      assert.equal(body.query.queryText, "Тестовая компания")
+      return Response.json({ rawData: Buffer.from(searchXml).toString("base64") })
+    }
+    assert.equal(url, "https://ai.api.cloud.yandex.net/v1/chat/completions")
+    const body = JSON.parse(String(init?.body))
+    assert.equal(body.tools, undefined)
+    assert.match(JSON.stringify(body.messages), /Контакты компании/)
+    return Response.json(completion("Подтверждённые сведения"))
+  })
+  const result = await researchYandex("Тестовая компания", "companyResearch", "", runtime)
+  assert.equal(result.grounded, true)
+  assert.deepEqual(result.sources, [{ sourceType: "url", url: "https://example.org/company", title: "Компания & партнёры" }])
+  assert.equal(calls.length, 2)
+})
+
+test("search rejects XML entities and malformed responses; empty results never trigger model research", async () => {
+  assert.throws(() => parseSearchXml('<!DOCTYPE x [<!ENTITY secret SYSTEM "file:///etc/passwd">]><x/>'), AiServiceError)
+  assert.throws(() => parseSearchXml('<yandexsearch><error code="15">fail</error></yandexsearch>'), AiServiceError)
+  for (const response of [searchXml.replace(/<doc>[\s\S]*?<\/doc>/, ""), "invalid-base64"]) {
+    let calls = 0
+    const runtime = createAiRuntime(fullProfile(), serviceEnv, async () => {
+      calls++
+      return Response.json({ rawData: response === "invalid-base64" ? response : Buffer.from(response).toString("base64") })
+    })
+    if (response === "invalid-base64") await assert.rejects(researchYandex("тест", "webSearch", "", runtime), AiServiceError)
+    else assert.equal((await researchYandex("тест", "webSearch", "", runtime)).grounded, false)
+    assert.equal(calls, 1)
+  }
+  const disabled = createAiRuntime(yandex(), yandexEnv, async () => { throw new Error("must not send") })
+  await assert.rejects(researchYandex("тест", "webSearch", "", disabled), AiPolicyError)
+})
+
+test("normalized speech preserves original timing when refinement omits timestamps", () => {
+  const refined = { result: { finalRefinement: { finalIndex: "0", normalizedText: { alternatives: [{ text: "Уточнённый текст" }], channelTag: "0" } } } }
+  const result = parseSpeechResult(JSON.stringify([speechEvents[0], refined]))
+  assert.deepEqual(result, [{ startSeconds: 0.1, durationSeconds: 0.8, speaker: "Unknown", transcript: "Уточнённый текст" }])
+  assert.throws(() => parseSpeechResult(JSON.stringify(refined)), AiServiceError)
+})
+
+const ocrPages = [
+  { result: { page: "0", textAnnotation: { fullText: "Первая страница 123" } } },
+  { result: { page: "1", textAnnotation: { fullText: "Вторая страница 456" } } },
+]
+
+test("PDF goes directly to Yandex OCR without vision, temporary files or native tools", async () => {
+  const profile = buildStage3Profile(yandex(), ["pdf"])
+  assert.equal(profile.models["yandex-vision"].enabled, false)
+  const calls: string[] = []
+  const runtime = createAiRuntime(profile, { ...yandexEnv, YANDEX_OCR_API_KEY: "synthetic-ocr" }, async (input, init) => {
+    const url = String(input)
+    calls.push(url)
+    assert.equal(new Headers(init?.headers).get("authorization"), "Api-Key synthetic-ocr")
+    assert.equal(init?.redirect, "error")
+    if (url.endsWith("recognizeTextAsync")) {
+      assert.deepEqual(JSON.parse(String(init?.body)), { mimeType: "application/pdf", languageCodes: ["*"], model: "page", content: Buffer.from("%PDF-synthetic").toString("base64") })
+      assert.equal(new Headers(init?.headers).get("x-data-logging-enabled"), "false")
+      return Response.json({ id: "ocr-operation" })
+    }
+    if (url.includes("operation.api.")) return Response.json({ done: true })
+    assert.equal(url, "https://ai.api.cloud.yandex.net/ocr/v1/getRecognition?operationId=ocr-operation")
+    return new Response(ocrPages.map((page) => JSON.stringify(page)).join("\n"))
+  })
+  const prepared = await prepareMediaInput("parsePdf", Buffer.from("%PDF-synthetic"), "file.pdf", "application/pdf", runtime)
+  assert.equal(prepared.preprocessingModel, "vision-ocr/page")
+  assert.match(JSON.stringify(prepared.content), /Первая страница 123[\s\S]*Вторая страница 456/)
+  assert.equal(calls.length, 3)
+})
+
+test("OCR rejects page gaps, duplicates, over-limit and empty results instead of accepting partial documents", () => {
+  assert.throws(() => parseOcrResult(JSON.stringify(ocrPages), 1), AiPolicyError)
+  for (const pages of [[ocrPages[1]], [ocrPages[0], ocrPages[0]], [{ result: { page: "0", textAnnotation: { fullText: "" } } }]]) {
+    assert.throws(() => parseOcrResult(JSON.stringify(pages), 10))
+  }
+  assert.match(parseOcrResult(JSON.stringify([ocrPages[1], ocrPages[0]]), 10), /Page 1[\s\S]*Page 2/)
+})
+
+test("OCR rejects invalid inputs before network and propagates safe errors without a decoder fallback", async () => {
+  let requests = 0
+  const runtime = createAiRuntime(fullProfile(), serviceEnv, async () => { requests++; return new Response("private details", { status: 403 }) })
+  await assert.rejects(recognizePdf(Buffer.alloc(10_000_001), runtime), AiPolicyError)
+  await assert.rejects(recognizePdf(Buffer.from("not a PDF"), runtime), AiPolicyError)
+  assert.equal(requests, 0)
+  await assert.rejects(recognizePdf(Buffer.from("%PDF-synthetic"), runtime), (error: unknown) => {
+    assert.ok(error instanceof AiServiceError)
+    assert.equal(error.service, "ocr")
+    assert.equal(error.message.includes("private details"), false)
+    return true
+  })
+  assert.equal(requests, 1)
+})
+
+test("WAV microphone encoding produces bounded mono PCM with correct duration and clipping", () => {
+  const wav = new Uint8Array(encodeMonoWav([new Float32Array(48000).fill(2), new Float32Array(48000).fill(-2)], 48000))
+  assert.equal(speechContainer(wav), "WAV")
+  assert.equal(pcmWavDuration(wav), 2)
+  assert.equal(wav.length, 44 + 2 * 16000 * 2)
+  const view = new DataView(wav.buffer)
+  assert.equal(view.getInt16(44, true), 32767)
+  assert.equal(view.getInt16(44 + 16000 * 2, true), -32768)
+  assert.throws(() => encodeMonoWav([], 48000))
+  assert.throws(() => encodeMonoWav([new Float32Array(16000 * 92)], 16000))
+  assert.throws(() => pcmWavDuration(wav.subarray(0, 50)), AiPolicyError)
+})
+
+test("MP3, PCM WAV and OGG Opus reach SpeechKit unchanged with explicit container types", async () => {
+  const fixtures = [
+    { type: "MP3", bytes: Buffer.from([255, 251, 144, 0, 0, 0]) },
+    { type: "OGG_OPUS", bytes: Buffer.from("OggS synthetic header OpusHead") },
+    { type: "WAV", bytes: Buffer.from(encodeMonoWav([new Float32Array(32000)], 16000)) },
+  ]
+  for (const fixture of fixtures) {
+    const runtime = createAiRuntime(fullProfile(), serviceEnv, async (input, init) => {
+      const url = String(input)
+      if (url.endsWith("recognizeFileAsync")) {
+        const body = JSON.parse(String(init?.body))
+        assert.equal(body.content, fixture.bytes.toString("base64"))
+        assert.equal(body.recognitionModel.audioFormat.containerAudio.containerAudioType, fixture.type)
+        assert.equal(body.uri, undefined)
+        return Response.json({ id: "speech-operation" })
+      }
+      if (url.includes("operation.api.")) return Response.json({ done: true })
+      if (url.includes("getRecognition")) return new Response(JSON.stringify(speechEvents))
+      assert.match(url, /deleteRecognition/)
+      return new Response("")
+    })
+    const result = await transcribeMedia(fixture.bytes, "audio", runtime)
+    assert.equal(result.durationSeconds, 2)
+    assert.equal(result.segments[0].transcript, "Тестовый заказ 123")
+  }
+})
+
+test("unsupported audio and video never trigger hidden conversion or external calls", async () => {
+  let requests = 0
+  const runtime = createAiRuntime(fullProfile(), serviceEnv, async () => { requests++; throw new Error("must not send") })
+  for (const bytes of [Buffer.from("ftypM4A"), Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.from("OggS vorbis")]) {
+    await assert.rejects(transcribeMedia(bytes, "audio", runtime), AiPolicyError)
+  }
+  await assert.rejects(transcribeMedia(Buffer.from("video"), "video", runtime), AiPolicyError)
+  assert.throws(() => buildStage3Profile(yandex(), ["video"]), AiConfigurationError)
+  assert.equal(requests, 0)
+})
+
+test("compressed recording duration comes from full received audio, not its final utterance", async () => {
+  const runtime = createAiRuntime(fullProfile(), serviceEnv, async (input) => {
+    const url = String(input)
+    if (url.endsWith("recognizeFileAsync")) return Response.json({ id: "speech-operation" })
+    if (url.includes("operation.api.")) return Response.json({ done: true })
+    if (url.includes("getRecognition")) return Response.json({ result: { ...speechEvents[0].result, audioCursors: { finalIndex: "0", receivedDataMs: "181000" } } })
+    return new Response("")
+  })
+  await assert.rejects(transcribeMedia(Buffer.from([255, 251, 144, 0]), "audio", runtime), AiPolicyError)
+})
+
+test("audio worklet flushes its final partial buffer and mixes channels locally", () => {
+  const messages: { type: string; buffer?: ArrayBuffer }[] = []
+  type Processor = { port: { onmessage: (event: { data: { type: string } }) => void }; process: (inputs: Float32Array[][]) => boolean }
+  let ProcessorClass: new () => Processor
+  runInNewContext(readFileSync("public/ai/pcm-recorder.js", "utf8"), {
+    AudioWorkletProcessor: class { port = { postMessage: (message: { type: string; buffer?: ArrayBuffer }) => messages.push(message) } },
+    registerProcessor: (_: string, implementation: new () => Processor) => { ProcessorClass = implementation },
+  })
+  const processor = new ProcessorClass!()
+  assert.equal(processor.process([[new Float32Array([1, 0]), new Float32Array([0, -1])]]), true)
+  processor.port.onmessage({ data: { type: "stop" } })
+  assert.equal(messages[0].type, "chunk")
+  assert.deepEqual(Array.from(new Float32Array(messages[0].buffer!)), [0.5, -0.5])
+  assert.equal(messages[1].type, "stopped")
+  assert.equal(processor.process([]), false)
 })

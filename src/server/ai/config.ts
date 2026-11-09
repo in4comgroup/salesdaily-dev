@@ -6,7 +6,7 @@ import { z } from "zod"
 export const AI_TASKS = [
   "chat", "analytics", "cards", "deals", "orderRequest", "chatSummary",
   "companyResearch", "companyExtraction", "parseText", "parsePdf",
-  "parseImage", "parseAudio", "parseVideo", "parseOffice", "orgAttribution", "webSearch",
+  "describeImage", "parseImage", "parseAudio", "parseVideo", "parseOffice", "orgAttribution", "webSearch",
 ] as const
 export type AiTask = (typeof AI_TASKS)[number]
 
@@ -15,7 +15,7 @@ export const AI_CAPABILITIES = [
 ] as const
 export type AiCapability = (typeof AI_CAPABILITIES)[number]
 
-export const AI_FEATURES = ["webSearch", "websiteFetch", "browserSpeechRecognition"] as const
+export const AI_FEATURES = ["webSearch", "websiteFetch", "browserSpeechRecognition", "serverSpeechRecognition"] as const
 export type AiFeature = (typeof AI_FEATURES)[number]
 
 const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
@@ -54,6 +54,12 @@ const taskSchema = z.strictObject({
   fallbackModels: z.array(id).max(0).default([]),
 })
 
+const serviceSchema = z.strictObject({
+  enabled: z.boolean(),
+  connectionId: id.optional(),
+  credentialsEnv: envName.optional(),
+})
+
 export const aiConfigSchema = z.strictObject({
   version: z.literal(1),
   policy: z.strictObject({
@@ -62,8 +68,22 @@ export const aiConfigSchema = z.strictObject({
       webSearch: z.boolean(),
       websiteFetch: z.boolean(),
       browserSpeechRecognition: z.boolean(),
+      serverSpeechRecognition: z.boolean().default(false),
     }),
   }),
+  preprocessing: z.strictObject({
+    images: z.enum(["native", "vision"]).default("native"),
+    pdf: z.enum(["native", "ocr"]).default("native"),
+    audio: z.enum(["native", "speechkit"]).default("native"),
+    video: z.enum(["native", "disabled"]).default("native"),
+    maxMediaSeconds: z.number().int().min(1).max(600).default(180),
+    pdfMaxPages: z.number().int().min(1).max(20).default(10),
+  }).default({ images: "native", pdf: "native", pdfMaxPages: 10, audio: "native", video: "native", maxMediaSeconds: 180 }),
+  services: z.strictObject({
+    ocr: serviceSchema.default({ enabled: false }),
+    speech: serviceSchema.default({ enabled: false }),
+    search: serviceSchema.default({ enabled: false }),
+  }).default({ ocr: { enabled: false }, speech: { enabled: false }, search: { enabled: false } }),
   connections: z.record(id, connectionSchema),
   models: z.record(id, modelSchema),
   tasks: z.partialRecord(z.enum(AI_TASKS), taskSchema),
@@ -71,6 +91,28 @@ export const aiConfigSchema = z.strictObject({
   const issue = (path: (string | number)[], message: string) =>
     ctx.addIssue({ code: "custom", path, message })
 
+  if (config.preprocessing.images === "vision" && config.tasks.parseImage?.enabled && !config.tasks.describeImage?.enabled) {
+    issue(["tasks", "describeImage"], "Image preprocessing requires describeImage")
+  }
+  if (config.preprocessing.pdf === "ocr" && config.tasks.parsePdf?.enabled && !config.services.ocr.enabled) {
+    issue(["services", "ocr"], "PDF preprocessing requires an enabled OCR service")
+  }
+  if (config.preprocessing.video === "disabled" && config.tasks.parseVideo?.enabled) {
+    issue(["tasks", "parseVideo"], "Video processing is unavailable in this profile")
+  }
+
+  for (const [name, service] of Object.entries(config.services)) {
+    if (!service.enabled) continue
+    const connection = service.connectionId ? config.connections[service.connectionId] : undefined
+    if (!service.credentialsEnv || !connection?.enabled || connection.adapter !== "yandex-openai-compatible" ||
+        !config.policy.allowedConnections.includes(service.connectionId!)) {
+      issue(["services", name], "Service needs an approved Yandex connection and explicit credential environment variable")
+    }
+  }
+  if (((config.preprocessing.audio === "speechkit" && config.tasks.parseAudio?.enabled) ||
+       config.policy.features.serverSpeechRecognition) && !config.services.speech.enabled) {
+    issue(["services", "speech"], "Speech preprocessing requires an enabled speech service")
+  }
   for (const connectionId of config.policy.allowedConnections) {
     if (!Object.hasOwn(config.connections, connectionId)) {
       issue(["policy", "allowedConnections"], `Unknown connection: ${connectionId}`)
