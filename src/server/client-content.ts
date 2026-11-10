@@ -63,6 +63,9 @@ export type ClientDetail = {
   currency: string
   userId: string
   userName: string | null
+  // «Ответственный»: effective value = responsible_user_id ?? creator.
+  responsibleUserId: string
+  responsibleName: string | null
   organizationId: string
   createdAt: string
   updatedAt: string
@@ -96,6 +99,7 @@ export async function getClientDetail(
       status: client.status,
       currency: client.currency,
       userId: client.userId,
+      responsibleUserId: client.responsibleUserId,
       organizationId: client.organizationId,
       createdAt: client.createdAt,
       updatedAt: client.updatedAt,
@@ -112,8 +116,10 @@ export async function getClientDetail(
     throw new ClientContentScopeError("forbidden", "Client not in scope")
   }
 
-  // Fetch creator name in parallel with contacts. Both are bounded.
-  const [contactRows, creatorRows] = await Promise.all([
+  const responsibleUserId = row.responsibleUserId ?? row.userId
+
+  // Fetch creator + responsible names in parallel with contacts. All bounded.
+  const [contactRows, creatorRows, responsibleRows] = await Promise.all([
     db
       .select({
         contact,
@@ -136,9 +142,18 @@ export async function getClientDetail(
       .from(user)
       .where(eq(user.id, row.userId))
       .limit(1),
+    responsibleUserId === row.userId
+      ? Promise.resolve(null)
+      : db
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, responsibleUserId))
+          .limit(1),
   ])
 
   const userName = creatorRows[0]?.name ?? null
+  const responsibleName =
+    responsibleRows === null ? userName : (responsibleRows[0]?.name ?? null)
 
   const lastActivity = (
     await loadClientLastActivity(organizationId, [row.id])
@@ -160,6 +175,8 @@ export async function getClientDetail(
     currency: row.currency,
     userId: row.userId,
     userName,
+    responsibleUserId,
+    responsibleName,
     organizationId: row.organizationId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

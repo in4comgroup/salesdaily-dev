@@ -41,6 +41,54 @@ Before changing database-backed code or `src/db/schema.ts`, read
 - **Deployment uses `.github/workflows/dev.yml`:** one managed Kubernetes Job uses the same image digest/SQL/runner as the application, reads DATABASE_URL from the existing cluster Secret, and must succeed before Deployment changes. Preserve the failure/timeout gate. A shorter/changed migration history in an old image must fail; application rollback requires compatible code packaged with current migration history, never an automatic database rollback.
 - Do not read/print real secrets or env files, copy DATABASE_URL into GitHub, or log connection strings/SQL data. `pg` accepts `sslmode=no-verify`; libpq clients (`psql`/`pg_dump`) require a separately prepared compatible SSL configuration. Use variable names/examples in commands and documentation.
 
+### ⛔ STRICT: `drizzle-kit generate` output → canonical migration (mandatory checklist)
+
+`drizzle-kit generate` output is **never** a migration as-is. It is raw input. Every item below is a hard gate: check it, and fix it or stop. When you hand a migration to the user, report each gate as pass / fixed / blocked. Do not skip a gate silently.
+
+**A. Get a clean delta (not a full-schema dump)**
+1. `drizzle.config.ts` writes to `tmp/drizzle-drafts` (often absent). With no `meta/_journal.json` + snapshot there, generate emits `CREATE` for the **whole** ORM schema. Never copy that.
+2. To get only the delta: on the **unchanged** `schema.ts` (e.g. `git stash` the schema edit), run `npx drizzle-kit generate` once to create the snapshot; restore the edit; run it again. Only the **second** file is the candidate delta. Delete the first one.
+3. The snapshot comes from `schema.ts`, not from the real DB. `schema.ts` can drift from `db/baseline/0000_baseline.sql` + later migrations. Cross-check every statement against the baseline + `db/migrations/*.sql` (does the object/column already exist? different type/default/name?).
+4. Renames: drizzle asks "rename or create+drop?" interactively. Never accept create+drop for an existing column/table (data loss). See D.
+
+**B. File and manifest format (runner rejects anything else)**
+5. Rename the file to the next consecutive number after the last manifest entry: `db/migrations/NNNN_description.sql`. Name must match `^NNNN_[a-z0-9_]+\.sql$` (lowercase, digits, `_` only). Drizzle's `0000_random_name.sql` numbering is always wrong here.
+6. Append the path **relative to `db/migrations/`** (e.g. `"0002_add_x.sql"`) to the END of `db/migrations/manifest.json`. Never reorder, edit, or remove existing entries/files.
+7. Do not commit anything under `tmp/drizzle-drafts`.
+
+**C. Transaction rules (runner owns one transaction per file)**
+8. Remove any `BEGIN;` / `COMMIT;` / `ROLLBACK;`. The runner fails the file if it finds them (plpgsql `BEGIN … END` bodies are fine).
+9. No `CREATE INDEX CONCURRENTLY`, `VACUUM`, `ALTER SYSTEM`, `CREATE DATABASE`, or anything else that cannot run inside a transaction. Long index builds → separate manual operation with its own approval.
+10. `ALTER TYPE … ADD VALUE`: allowed, but the new value must NOT be used (default, insert, update, check) in the same file. Use it in a later migration.
+11. Runner limits: `statement_timeout = 120s`, `lock_timeout = 5s`. Any statement that may exceed them (big table rewrite, large UPDATE/backfill) does not belong in a deploy migration.
+12. `--> statement-breakpoint` lines are SQL comments. They can stay or go.
+12a. **Schema-qualify every object name** (`"public"."client"`, `"public"."user"`, types, functions). `0000_baseline.sql` runs `set_config('search_path', '', false)` for the whole runner session, so on a fresh database every later file sees an EMPTY search_path and an unqualified `"client"` fails with 42P01. Drizzle emits unqualified table names (`ALTER TABLE "client"`, `CREATE INDEX … ON "client"`) — always rewrite them. (Found by the 0002 PG17 test; it passes on an existing DB, so only the empty-DB test catches it.)
+
+**D. Rolling-deploy safety (old pods still run against the new schema)**
+13. `ADD COLUMN … NOT NULL` without a DEFAULT on an existing table → fails on non-empty tables and breaks old code. Add nullable (or with a constant DEFAULT) first; NOT NULL in a later release after backfill.
+14. `DROP COLUMN` / `DROP TABLE` / `DROP TYPE` / `DROP INDEX` / `DROP FUNCTION` → remove, unless the user explicitly approved a contract-phase removal and no supported app version still uses it.
+15. `RENAME COLUMN` / `RENAME TABLE` → replace with expand/contract (add new, dual-write, switch reads, drop later). One-step rename breaks old pods.
+16. `ALTER COLUMN … SET DATA TYPE` → check for a table rewrite/lock. Heavy change → new column + backfill + switch.
+17. Enum value removal/rename: drizzle recreates the type (drop + create). Never accept it.
+18. Backfills (`UPDATE` of many rows) → out of the deploy migration; plan batched, resumable, separately.
+
+**E. Objects outside `schema.ts` must survive**
+19. Reject any statement that drops or alters Search V2 objects (`immutable_unaccent`, `translit_cyr_lat`, `to_or_tsquery`, their triggers), product generated columns, GIN/trigram indexes, or the `unaccent` / `pg_trgm` extensions. Their absence from `schema.ts` is not a reason to touch them.
+20. Never touch the `crm_migrations` schema or its `history` table.
+
+**F. Verify before handing over**
+21. ⚠ CI (`.github/workflows/migrations.yml` → `scripts/migrations/test.cjs`) tests ONLY the runner + 0000/0001 on PG17. It does **not** apply new `000N` files. The first real execution of a new file is the deploy Job. So verify locally on a disposable PostgreSQL 17 (never a project DB), e.g.:
+    ```sh
+    docker run --rm -d --name crm-mig-pg17 -p 55432:5432 -e POSTGRES_PASSWORD=test postgres:17
+    DATABASE_URL=postgresql://postgres:test@localhost:55432/postgres node scripts/migrations/run.cjs apply   # empty → all files
+    DATABASE_URL=postgresql://postgres:test@localhost:55432/postgres node scripts/migrations/run.cjs apply   # 2nd run = no-op
+    DATABASE_URL=postgresql://postgres:test@localhost:55432/postgres node scripts/migrations/run.cjs status
+    docker rm -f crm-mig-pg17
+    ```
+    Also apply it on a DB that holds representative rows in the affected tables (catches NOT NULL / cast / unique failures).
+22. If the change also touches `schema.ts`: run generate again after the migration is final. The output must be empty (no remaining diff between `schema.ts` and the snapshot).
+23. If Docker / PG17 is not available, say so plainly. Do not claim the migration is verified.
+
 ## Tech Stack
 
 - **Next.js 16** (App Router, React 19, TypeScript)

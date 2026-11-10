@@ -54,6 +54,7 @@ import ContactEditDialog from "@/components/forms/form-contact-edit"
 import { ClientLookupDialog } from "@/components/blocks/client-lookup-dialog"
 import { BlacklistEntityButton } from "@/components/blocks/client-blocklist-dialog"
 import { ClientContentTable } from "@/components/blocks/client-content-table"
+import { ClientResponsibleSelect } from "@/components/blocks/client-responsible-select"
 import { ContactDetailDrawer } from "@/components/blocks/contact-detail-drawer"
 import type { TaskStatus, EntityStatus, FunnelPhase } from "@/db/schema"
 import type { ClientRow } from "@/app/api/clients/route"
@@ -511,6 +512,16 @@ export function ClientDetailDrawer({
 
             <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
             <TabsContent value="info" className="space-y-3 pt-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="text-xs">Ответственный</span>
+                <ClientResponsibleSelect
+                  clientId={client.id}
+                  responsibleUserId={client.responsibleUserId}
+                  responsibleName={client.responsibleName}
+                  onChanged={onChanged}
+                  className="h-8 w-60"
+                />
+              </div>
               {client.userName && (
                 <div className="text-sm text-muted-foreground">
                   Создал: {client.userName}

@@ -259,6 +259,8 @@ export default function ClientsPage() {
         currency: d.currency,
         userId: d.userId,
         userName: d.userName,
+        responsibleUserId: d.responsibleUserId,
+        responsibleName: d.responsibleName,
         organizationId: d.organizationId,
         createdAt: d.createdAt,
         updatedAt: d.updatedAt,
@@ -464,6 +466,7 @@ export default function ClientsPage() {
                         <TableHead>Выручка за 12 мес.</TableHead>
                         <TableHead>Дата создания</TableHead>
                         <TableHead>Кто создал</TableHead>
+                        <TableHead>Ответственный</TableHead>
                         <TableHead>Статус</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -500,6 +503,7 @@ export default function ClientsPage() {
                               {new Date(c.createdAt).toLocaleDateString("ru-RU")}
                             </TableCell>
                             <TableCell>{c.userName ?? "—"}</TableCell>
+                            <TableCell>{c.responsibleName ?? "—"}</TableCell>
                             <TableCell>
                               <Badge
                                 variant="secondary"
