@@ -417,9 +417,19 @@ export const client = pgTable(
     enrichmentCandidates: jsonb("enrichment_candidates").$type<
       ClientLookupCandidateJson[]
     >(),
+    // Creator (immutable). The «Ответственный» (account owner) is below.
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    // «Ответственный» — the org member responsible for this client. NULL means
+    // "the creator" (effective value = COALESCE(responsible_user_id, user_id)),
+    // so rows inserted by older code / discovery need no backfill. Changed via
+    // `setClientResponsible` (src/server/clients.ts): an org owner or admin
+    // may assign any member; a plain member may only hand the client to an
+    // org owner.
+    responsibleUserId: text("responsible_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -432,6 +442,7 @@ export const client = pgTable(
   (table) => [
     index("client_organizationId_idx").on(table.organizationId),
     index("client_userId_idx").on(table.userId),
+    index("client_responsibleUserId_idx").on(table.responsibleUserId),
     index("client_status_idx").on(table.status),
     index("client_enrichmentStatus_idx").on(table.enrichmentStatus),
   ],

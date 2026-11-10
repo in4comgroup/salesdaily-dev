@@ -28,12 +28,14 @@ import {
   Phone,
   Plus,
   User,
+  UserCheck,
 } from "lucide-react"
 import ClientEditDialog from "@/components/forms/form-client-edit"
 import ContactEditDialog from "@/components/forms/form-contact-edit"
 import { ClientLookupDialog } from "@/components/blocks/client-lookup-dialog"
 import { ClientContentTable } from "@/components/blocks/client-content-table"
 import { AccountSummary } from "@/components/blocks/client-card"
+import { ClientResponsibleSelect } from "@/components/blocks/client-responsible-select"
 import type { ClientDetail } from "@/server/client-content"
 import type { ClientRow, ClientRevenueSummary } from "@/app/api/clients/route"
 import type { DealRow } from "@/app/api/deals/route"
@@ -108,6 +110,8 @@ export function ClientDetailShell({
       currency: detail.currency,
       userId: detail.userId,
       userName: detail.userName,
+      responsibleUserId: detail.responsibleUserId,
+      responsibleName: detail.responsibleName,
       organizationId: detail.organizationId,
       createdAt: detail.createdAt,
       updatedAt: detail.updatedAt,
@@ -219,6 +223,17 @@ export function ClientDetailShell({
             value={detail.webUrl}
             href={detail.webUrl ?? undefined}
           />
+          <div className="flex items-center gap-2 sm:col-span-2 text-xs">
+            <UserCheck className="h-3.5 w-3.5" />
+            <span>Ответственный:</span>
+            <ClientResponsibleSelect
+              clientId={detail.id}
+              responsibleUserId={detail.responsibleUserId}
+              responsibleName={detail.responsibleName}
+              onChanged={refresh}
+              className="h-7 w-56 text-xs"
+            />
+          </div>
           <div className="flex items-center gap-2 sm:col-span-2 text-xs">
             <User className="h-3.5 w-3.5" />
             <span>

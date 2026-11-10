@@ -358,6 +358,9 @@ export function ClientCard({
           {new Date(client.createdAt).toLocaleDateString("ru-RU")}
           {client.userName && ` · ${client.userName}`}
         </div>
+        <div className="text-xs text-muted-foreground truncate">
+          Ответственный: {client.responsibleName ?? "—"}
+        </div>
       </CardContent>
     </Card>
   )

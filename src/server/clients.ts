@@ -12,7 +12,9 @@ import {
   type EntityStatus,
   type ClientLookupCandidateJson,
   user,
+  member,
 } from "@/db/schema"
+import { alias } from "drizzle-orm/pg-core"
 import {
   and,
   eq,
@@ -23,6 +25,7 @@ import {
   count,
   inArray,
   gte,
+  sql,
 } from "drizzle-orm"
 import { computeOrderDiscount } from "@/lib/orders-format"
 import { loadClientLastActivity } from "@/server/client-activity"
@@ -73,6 +76,9 @@ export type ClientRow = {
   currency: string
   userId: string
   userName: string | null
+  // «Ответственный»: effective value = responsible_user_id ?? creator.
+  responsibleUserId: string
+  responsibleName: string | null
   organizationId: string
   createdAt: string
   updatedAt: string
@@ -82,6 +88,11 @@ export type ClientRow = {
   lastActivityAt?: string
   contacts: ClientContactPreview[]
 }
+
+// «Ответственный» — second `user` join for the effective responsible user
+// (NULL column = the creator, see schema.ts `client.responsibleUserId`).
+const responsibleUser = alias(user, "responsible_user")
+const effectiveResponsibleId = sql<string>`coalesce(${client.responsibleUserId}, ${client.userId})`
 
 function maxIso(a: Date, b: Date | undefined): string {
   return (b && b > a ? b : a).toISOString()
@@ -116,9 +127,11 @@ export async function listClients(): Promise<ClientRow[]> {
     .select({
       client,
       userName: user.name,
+      responsibleName: responsibleUser.name,
     })
     .from(client)
     .leftJoin(user, eq(client.userId, user.id))
+    .leftJoin(responsibleUser, eq(responsibleUser.id, effectiveResponsibleId))
     .where(eq(client.organizationId, activeOrgId))
     .orderBy(desc(client.updatedAt))
 
@@ -172,6 +185,8 @@ export async function listClients(): Promise<ClientRow[]> {
     currency: r.client.currency,
     userId: r.client.userId,
     userName: r.userName,
+    responsibleUserId: r.client.responsibleUserId ?? r.client.userId,
+    responsibleName: r.responsibleName,
     organizationId: r.client.organizationId,
     createdAt: r.client.createdAt.toISOString(),
     updatedAt: r.client.updatedAt.toISOString(),
@@ -295,9 +310,14 @@ export async function listClientsFeed(params: {
       : [ne(client.status, "deleted"), ne(client.status, "blocked")]
 
   const rows = await db
-    .select({ client, userName: user.name })
+    .select({
+      client,
+      userName: user.name,
+      responsibleName: responsibleUser.name,
+    })
     .from(client)
     .leftJoin(user, eq(client.userId, user.id))
+    .leftJoin(responsibleUser, eq(responsibleUser.id, effectiveResponsibleId))
     .where(and(eq(client.organizationId, activeOrgId), ...statusConditions))
 
   const taskSummary = await listTaskSummaryByClient()
@@ -387,6 +407,8 @@ export async function listClientsFeed(params: {
       currency: r.client.currency,
       userId: r.client.userId,
       userName: r.userName,
+      responsibleUserId: r.client.responsibleUserId ?? r.client.userId,
+      responsibleName: r.responsibleName,
       organizationId: r.client.organizationId,
       createdAt: r.client.createdAt.toISOString(),
       updatedAt: r.client.updatedAt.toISOString(),
@@ -550,6 +572,128 @@ export async function updateClient(
         : {}),
     })
     .where(eq(client.id, clientId))
+}
+
+// ── «Ответственный» (responsible user) ───────────────────────────────
+//
+// Rules (enforced here, the UI only mirrors them):
+//   • org owner / admin → may assign ANY member of the active org;
+//   • plain member      → may only hand the client over to an org owner.
+// The target must be a member of the client's org. Errors use fixed messages
+// ("Unauthorized" | "Forbidden" | "Client not found" | "Not a member") that
+// `/api/clients/[id]/responsible` maps to HTTP codes.
+
+export type ClientResponsibleOption = {
+  id: string
+  name: string
+  email: string
+  isOwner: boolean
+}
+
+export type ClientResponsibleState = {
+  responsibleUserId: string
+  responsibleName: string | null
+  /** Caller is an org owner or admin → may pick any member. */
+  canAssignAny: boolean
+  /** Users the caller may assign (owners only, unless canAssignAny). */
+  options: ClientResponsibleOption[]
+}
+
+// better-auth stores multiple roles as a comma-separated string.
+function hasOrgRole(
+  role: string | null | undefined,
+  wanted: readonly string[],
+): boolean {
+  return (role ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .some((r) => wanted.includes(r))
+}
+const hasOwnerRole = (role: string | null | undefined) =>
+  hasOrgRole(role, ["owner"])
+// Org roles allowed to assign ANY member as «Ответственный».
+const canAssignAnyResponsible = (role: string | null | undefined) =>
+  hasOrgRole(role, ["owner", "admin"])
+
+async function listOrgMembersWithRoles(organizationId: string) {
+  return db
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: member.role,
+    })
+    .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(eq(member.organizationId, organizationId))
+    .orderBy(user.name)
+}
+
+export async function getClientResponsibleState(
+  clientId: string,
+): Promise<ClientResponsibleState> {
+  const { session, activeOrgId } = await requireOrgContext()
+  const current = await assertClientInOrg(clientId, activeOrgId)
+
+  const members = await listOrgMembersWithRoles(activeOrgId)
+  const caller = members.find((m) => m.id === session.user.id)
+  if (!caller) throw new Error("Unauthorized")
+  const canAssignAny = canAssignAnyResponsible(caller.role)
+
+  const responsibleUserId = current.responsibleUserId ?? current.userId
+  let responsibleName =
+    members.find((m) => m.id === responsibleUserId)?.name ?? null
+  if (responsibleName === null) {
+    // Responsible user left the org (row in `user` still exists).
+    const rows = await db
+      .select({ name: user.name })
+      .from(user)
+      .where(eq(user.id, responsibleUserId))
+      .limit(1)
+    responsibleName = rows[0]?.name ?? null
+  }
+
+  const options = members
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      isOwner: hasOwnerRole(m.role),
+    }))
+    .filter((m) => canAssignAny || m.isOwner)
+
+  return { responsibleUserId, responsibleName, canAssignAny, options }
+}
+
+export async function setClientResponsible(
+  clientId: string,
+  targetUserId: string,
+): Promise<{ responsibleUserId: string; responsibleName: string }> {
+  const { session, activeOrgId } = await requireOrgContext()
+  const current = await assertClientInOrg(clientId, activeOrgId)
+
+  const members = await listOrgMembersWithRoles(activeOrgId)
+  const caller = members.find((m) => m.id === session.user.id)
+  if (!caller) throw new Error("Unauthorized")
+  const target = members.find((m) => m.id === targetUserId)
+  if (!target) throw new Error("Not a member")
+  if (!canAssignAnyResponsible(caller.role) && !hasOwnerRole(target.role)) {
+    throw new Error("Forbidden")
+  }
+
+  await db
+    .update(client)
+    .set({
+      responsibleUserId: target.id,
+      // Re-assignment is not client activity: keep updatedAt so the
+      // «N дн без контакта» badge / feed ordering don't treat it as a touch.
+      updatedAt: current.updatedAt,
+    })
+    .where(
+      and(eq(client.id, clientId), eq(client.organizationId, activeOrgId)),
+    )
+
+  return { responsibleUserId: target.id, responsibleName: target.name }
 }
 
 // ── Web lookup (Gemini + grounded google_search) ─────────────────────
