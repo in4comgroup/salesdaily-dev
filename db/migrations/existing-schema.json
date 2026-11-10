@@ -1,0 +1,4914 @@
+{
+  "enums": [
+    {
+      "typname": "blocklist_kind",
+      "enumlabel": "company",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "blocklist_kind",
+      "enumlabel": "domain",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "blocklist_kind",
+      "enumlabel": "email",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "blocklist_kind",
+      "enumlabel": "person",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "action_required",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "ambiguity",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "business_info",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "client_activity",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "colleagues_activity",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "data_intelligence",
+      "enumsortorder": 6
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "log_only",
+      "enumsortorder": 8
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "momentum",
+      "enumsortorder": 7
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "new_order",
+      "enumsortorder": 9
+    },
+    {
+      "typname": "card_category",
+      "enumlabel": "support",
+      "enumsortorder": 10
+    },
+    {
+      "typname": "card_priority",
+      "enumlabel": "high",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "card_priority",
+      "enumlabel": "normal",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "blocker",
+      "enumsortorder": 7
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "champion",
+      "enumsortorder": 6
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "decision_maker",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "economic_buyer",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "expert",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "gatekeeper",
+      "enumsortorder": 9
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "influencer",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "initiator",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "deal_contact_role",
+      "enumlabel": "user",
+      "enumsortorder": 8
+    },
+    {
+      "typname": "deal_status",
+      "enumlabel": "active",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "deal_status",
+      "enumlabel": "cancelled",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "deal_status",
+      "enumlabel": "deleted",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "enrichment_status",
+      "enumlabel": "enriched",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "enrichment_status",
+      "enumlabel": "no_match",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "enrichment_status",
+      "enumlabel": "review",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "entity_status",
+      "enumlabel": "active",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "entity_status",
+      "enumlabel": "blocked",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "entity_status",
+      "enumlabel": "deleted",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "entity_status",
+      "enumlabel": "initial",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "entity_status",
+      "enumlabel": "suspended",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "funnel_phase",
+      "enumlabel": "action",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "funnel_phase",
+      "enumlabel": "awareness",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "funnel_phase",
+      "enumlabel": "decision",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "funnel_phase",
+      "enumlabel": "interest",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "funnel_phase",
+      "enumlabel": "retention",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "order_link_status",
+      "enumlabel": "active",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "order_link_status",
+      "enumlabel": "expired",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "order_link_status",
+      "enumlabel": "revoked",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "order_link_status",
+      "enumlabel": "used",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "order_request_item_mode",
+      "enumlabel": "discovery",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "order_request_item_mode",
+      "enumlabel": "explicit",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "order_request_item_status",
+      "enumlabel": "added",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "order_request_item_status",
+      "enumlabel": "pending",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "order_request_item_status",
+      "enumlabel": "skipped",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "order_request_status",
+      "enumlabel": "abandoned",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "order_request_status",
+      "enumlabel": "assembling",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "order_request_status",
+      "enumlabel": "done",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "order_request_status",
+      "enumlabel": "parsing",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "order_request_status",
+      "enumlabel": "ready",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "order_status",
+      "enumlabel": "awaiting_client",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "order_status",
+      "enumlabel": "cancelled",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "order_status",
+      "enumlabel": "confirmed",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "order_status",
+      "enumlabel": "draft",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "order_status",
+      "enumlabel": "finalized",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "org_attribution",
+      "enumlabel": "external",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "org_attribution",
+      "enumlabel": "own_org",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "org_attribution",
+      "enumlabel": "unknown",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "org_identity_kind",
+      "enumlabel": "address",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "org_identity_kind",
+      "enumlabel": "name",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "org_identity_kind",
+      "enumlabel": "website",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "parse_status",
+      "enumlabel": "complete",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "parse_status",
+      "enumlabel": "failed",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "parse_status",
+      "enumlabel": "pending",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "parse_status",
+      "enumlabel": "processing",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "parse_status",
+      "enumlabel": "skipped",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "pipeline_run_status",
+      "enumlabel": "failed",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "pipeline_run_status",
+      "enumlabel": "running",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "pipeline_run_status",
+      "enumlabel": "success",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "pipeline_run_trigger",
+      "enumlabel": "cron",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "pipeline_run_trigger",
+      "enumlabel": "manual",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "r2_upload_status",
+      "enumlabel": "complete",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "r2_upload_status",
+      "enumlabel": "failed",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "r2_upload_status",
+      "enumlabel": "pending",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "role",
+      "enumlabel": "admin",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "role",
+      "enumlabel": "member",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "role",
+      "enumlabel": "owner",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "rule_type",
+      "enumlabel": "Custom",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "rule_type",
+      "enumlabel": "System",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "aichat_session",
+      "enumsortorder": 8
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "attachment",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "chat_message",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "derived_audio",
+      "enumsortorder": 7
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "drive_file",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "dropoff_file",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "email",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "source_item_kind",
+      "enumlabel": "inline_image",
+      "enumsortorder": 6
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "aichat",
+      "enumsortorder": 6
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "dropoff",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "gchat",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "gdrive",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "imap",
+      "enumsortorder": 8
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "nylas",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "telegram",
+      "enumsortorder": 7
+    },
+    {
+      "typname": "source_provider",
+      "enumlabel": "whatsapp",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "source_status",
+      "enumlabel": "active",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "source_status",
+      "enumlabel": "inactive",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "source_type",
+      "enumlabel": "external",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "source_type",
+      "enumlabel": "internal",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "task_priority",
+      "enumlabel": "high",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "task_priority",
+      "enumlabel": "low",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "task_priority",
+      "enumlabel": "medium",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "task_status",
+      "enumlabel": "closed",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "task_status",
+      "enumlabel": "done",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "task_status",
+      "enumlabel": "in_progress",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "task_status",
+      "enumlabel": "todo",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "call",
+      "enumsortorder": 2
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "docs",
+      "enumsortorder": 5
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "email",
+      "enumsortorder": 3
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "meet",
+      "enumsortorder": 1
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "offer",
+      "enumsortorder": 4
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "other",
+      "enumsortorder": 6
+    },
+    {
+      "typname": "task_type",
+      "enumlabel": "support",
+      "enumsortorder": 7
+    }
+  ],
+  "columns": [
+    {
+      "type": "text",
+      "attname": "access_token",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "access_token_expires_at",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "account_id",
+      "relname": "account",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "account",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "account",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id_token",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "password",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "provider_id",
+      "relname": "account",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "refresh_token",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "refresh_token_expires_at",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "scope",
+      "relname": "account",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "account",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "account",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "config_id",
+      "relname": "apikey",
+      "attnotnull": true,
+      "expression": "'default'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "apikey",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "enabled",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "expires_at",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "apikey",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "key",
+      "relname": "apikey",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "last_refill_at",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "last_request",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "metadata",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "permissions",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "prefix",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "rate_limit_enabled",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "rate_limit_max",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": "10",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "rate_limit_time_window",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": "86400000",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "reference_id",
+      "relname": "apikey",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "refill_amount",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "refill_interval",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "remaining",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "request_count",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "start",
+      "relname": "apikey",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "apikey",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "accepted",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "card_category",
+      "attname": "category",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "message",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "card_priority",
+      "attname": "priority",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": "'normal'::card_priority",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "rejection_reason",
+      "relname": "card",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "result_order_id",
+      "relname": "card",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "result_task_id",
+      "relname": "card",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "rule_id",
+      "relname": "card",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "source_item_id",
+      "relname": "card",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "card",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "card_id",
+      "relname": "card_client",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "client_id",
+      "relname": "card_client",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "card_id",
+      "relname": "card_contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "contact_id",
+      "relname": "card_contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "card_id",
+      "relname": "card_user",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "card_user",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "address",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text[]",
+      "attname": "aliases",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "comment",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "currency",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": "'RUB'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "custom_fields",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "email",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "enrichment_candidates",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "enrichment_status",
+      "attname": "enrichment_status",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "funnel_phase",
+      "attname": "funnel_phase",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": "'awareness'::funnel_phase",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name_phys",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "phone",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "entity_status",
+      "attname": "status",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": "'active'::entity_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "client",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "web_url",
+      "relname": "client",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text[]",
+      "attname": "aliases",
+      "relname": "contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "client_id",
+      "relname": "contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "email",
+      "relname": "contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name_native",
+      "relname": "contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "phone",
+      "relname": "contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "position",
+      "relname": "contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "entity_status",
+      "attname": "status",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": "'active'::entity_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "changes",
+      "relname": "deal",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "client_id",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "currency",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": "'RUB'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "description",
+      "relname": "deal",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "funnel_stage_id",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "last_moved_by",
+      "relname": "deal",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "position",
+      "relname": "deal",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "reasoning",
+      "relname": "deal",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "deal_status",
+      "attname": "status",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": "'active'::deal_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "deal",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(14,2)",
+      "attname": "value",
+      "relname": "deal",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "actor",
+      "relname": "deal_activity",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "actor_user_id",
+      "relname": "deal_activity",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "deal_activity",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "deal_id",
+      "relname": "deal_activity",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "from_stage_id",
+      "relname": "deal_activity",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "deal_activity",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "note",
+      "relname": "deal_activity",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "reasoning",
+      "relname": "deal_activity",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "to_stage_id",
+      "relname": "deal_activity",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "contact_id",
+      "relname": "deal_contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "deal_id",
+      "relname": "deal_contact",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "deal_contact_role",
+      "attname": "role",
+      "relname": "deal_contact",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(4,3)",
+      "attname": "closure_probability",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "display_name",
+      "relname": "deal_funnel_stage",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_active",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_hidden",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_pre_pipeline",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_system",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "owner_organization_id",
+      "relname": "deal_funnel_stage",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "sort_order",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "deal_funnel_stage",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "discovery_blocklist",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "created_by_user_id",
+      "relname": "discovery_blocklist",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "discovery_blocklist",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "blocklist_kind",
+      "attname": "kind",
+      "relname": "discovery_blocklist",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "label",
+      "relname": "discovery_blocklist",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "match_key",
+      "relname": "discovery_blocklist",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "note",
+      "relname": "discovery_blocklist",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "discovery_blocklist",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "source_item_id",
+      "relname": "discovery_blocklist",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "email",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "expires_at",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "inviter_id",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "role",
+      "relname": "invitation",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "status",
+      "relname": "invitation",
+      "attnotnull": true,
+      "expression": "'pending'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "member",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "member",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "member",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "role",
+      "relname": "member",
+      "attnotnull": true,
+      "expression": "'member'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "member",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "last_seen_at",
+      "relname": "notification_read_state",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "notification_read_state",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "notification_read_state",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "client_id",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "currency",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "'RUB'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "description",
+      "relname": "order",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(5,2)",
+      "attname": "discount_percent",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "order_date",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "order_status",
+      "attname": "status",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "'draft'::order_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(14,2)",
+      "attname": "total_amount",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "'0'::numeric",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "order",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "confirmed_at",
+      "relname": "order_access_link",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "order_access_link",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "expires_at",
+      "relname": "order_access_link",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "order_access_link",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "last_accessed_at",
+      "relname": "order_access_link",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "order_id",
+      "relname": "order_access_link",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "recipient_email",
+      "relname": "order_access_link",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "order_link_status",
+      "attname": "status",
+      "relname": "order_access_link",
+      "attnotnull": true,
+      "expression": "'active'::order_link_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "token_hash",
+      "relname": "order_access_link",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "order_id",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(14,2)",
+      "attname": "position_price",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": "'0'::numeric",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "product_id",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "quantity",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": "1",
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(14,2)",
+      "attname": "unit_price",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": "'0'::numeric",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "order_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "client_id",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "comment",
+      "relname": "order_request",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "order_id",
+      "relname": "order_request",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "parse_error",
+      "relname": "order_request",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "raw_text",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "order_request_status",
+      "attname": "status",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": "'parsing'::order_request_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "order_request",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "filters",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "label",
+      "relname": "order_request_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "order_request_item_mode",
+      "attname": "mode",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "ordinal",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "quantity_hint",
+      "relname": "order_request_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "raw_snippet",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "request_id",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "search_phrase",
+      "relname": "order_request_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text[]",
+      "attname": "search_terms",
+      "relname": "order_request_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "order_request_item_status",
+      "attname": "status",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": "'pending'::order_request_item_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "order_request_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "org_identity_entry",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "created_by_user_id",
+      "relname": "org_identity_entry",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "org_identity_entry",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "org_identity_kind",
+      "attname": "kind",
+      "relname": "org_identity_entry",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "label",
+      "relname": "org_identity_entry",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "match_key",
+      "relname": "org_identity_entry",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "note",
+      "relname": "org_identity_entry",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "org_identity_entry",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "address",
+      "relname": "organization",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "organization",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "email",
+      "relname": "organization",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "organization",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "logo",
+      "relname": "organization",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "metadata",
+      "relname": "organization",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "organization",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "phone",
+      "relname": "organization",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "slug",
+      "relname": "organization",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "web_url",
+      "relname": "organization",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "errors_json",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "'[]'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "finished_at",
+      "relname": "pipeline_run",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "parse_attempted",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "parse_capped",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "parse_complete",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "parse_failed",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "parse_skipped",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "started_at",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "pipeline_run_status",
+      "attname": "status",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "'running'::pipeline_run_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "sync_items_inserted",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "sync_items_updated",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "sync_sources_failed",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "sync_sources_succeeded",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "sync_sources_total",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "pipeline_run_trigger",
+      "attname": "trigger",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "upload_attempted",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "upload_failed",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "upload_succeeded",
+      "relname": "pipeline_run",
+      "attnotnull": true,
+      "expression": "0",
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "accounting_metadata",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "additional_metadata",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "category",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "image_url",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_drink",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": "((category IS DISTINCT FROM 'Бокалы'::text) AND (category IS DISTINCT FROM 'Хранение бутылок'::text) AND (category IS DISTINCT FROM 'Подарочная упаковка'::text) AND (category IS DISTINCT FROM 'Сиропы'::text) AND (category IS DISTINCT FROM 'Тоники'::text) AND (category IS DISTINCT FROM 'Минеральная вода'::text) AND (category IS DISTINCT FROM 'Газированная вода'::text))",
+      "attgenerated": "s"
+    },
+    {
+      "type": "boolean",
+      "attname": "is_gift",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": "(((additional_metadata ->> 'gift_packaging'::text) = 'Да'::text) OR (name ~~* '%подароч%'::text) OR (name ~~* '%деревян%'::text))",
+      "attgenerated": "s"
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name_norm",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": "lower(immutable_unaccent(translit_cyr_lat(name)))",
+      "attgenerated": "s"
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "numeric(14,2)",
+      "attname": "price",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "region_norm",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": "lower(immutable_unaccent(translit_cyr_lat((additional_metadata ->> 'region'::text))))",
+      "attgenerated": "s"
+    },
+    {
+      "type": "tsvector",
+      "attname": "search_vector",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": "((((((setweight(to_tsvector('simple'::regconfig, COALESCE(name, ''::text)), 'A'::\"char\") || setweight(to_tsvector('simple'::regconfig, COALESCE(lower(immutable_unaccent(translit_cyr_lat(name))), ''::text)), 'A'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE((additional_metadata ->> 'vendor'::text), ''::text)), 'A'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(category, ''::text)), 'C'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE((additional_metadata ->> 'type'::text), ''::text)), 'C'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE((additional_metadata ->> 'country_name'::text), ''::text)), 'D'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(lower(immutable_unaccent(translit_cyr_lat((additional_metadata ->> 'region'::text)))), ''::text)), 'D'::\"char\"))",
+      "attgenerated": "s"
+    },
+    {
+      "type": "entity_status",
+      "attname": "status",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": "'active'::entity_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "stock_metadata",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "integer",
+      "attname": "total_stock",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "product",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "web_page_url",
+      "relname": "product",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "alias_norm",
+      "relname": "product_alias",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "canonical",
+      "relname": "product_alias",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "product_alias",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "kind",
+      "relname": "product_alias",
+      "attnotnull": true,
+      "expression": "'brand'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "product_alias",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "content",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": "''::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_deleted",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "rule_type",
+      "attname": "type",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": "'Custom'::rule_type",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "rule",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "active_organization_id",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "active_organization_logo",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "active_organization_name",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "active_organization_slug",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "session",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "expires_at",
+      "relname": "session",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "session",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "impersonated_by",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "ip_address",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "token",
+      "relname": "session",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "session",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_agent",
+      "relname": "session",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "session",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "automated_parsing_is_allowed",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "created_by_user_id",
+      "relname": "source",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "credentials_ref",
+      "relname": "source",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "description",
+      "relname": "source",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_system",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "last_synced_at",
+      "relname": "source",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "owner_organization_id",
+      "relname": "source",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "source_provider",
+      "attname": "provider",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "provider_config",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "source_status",
+      "attname": "status",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "'active'::source_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "template_id",
+      "relname": "source",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "source_type",
+      "attname": "type",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "'external'::source_type",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "source",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "card_analysis_scanned_at",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "deal_analysis_scanned_at",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "discovery_scanned_at",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "external_id",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "source_item_kind",
+      "attname": "external_type",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "external_url",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "fetched_at",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "filename",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "markdown_r2_key",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "bigint",
+      "attname": "markdown_r2_size_bytes",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "metadata_json",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "mime_type",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "org_attribution",
+      "attname": "org_attribution",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "'unknown'::org_attribution",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "parent_source_item_id",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "parse_error",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "parse_status",
+      "attname": "parse_status",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "'pending'::parse_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "parsed_at",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "parsed_markdown",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "parser_model",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "parser_version",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "r2_upload_status",
+      "attname": "r2_upload_status",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "'pending'::r2_upload_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "r2_uploaded_at",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "bigint",
+      "attname": "size_bytes",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "source_created_at",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "source_id",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "thread_external_id",
+      "relname": "source_item",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "source_item",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "default_automated_parsing_is_allowed",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "default_provider_config",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "description",
+      "relname": "source_template",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_default",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "is_visible_to_orgs",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "true",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "source_provider",
+      "attname": "provider",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "source_status",
+      "attname": "status",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "'active'::source_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "source_type",
+      "attname": "type",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "'external'::source_type",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "source_template",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "assignee_id",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "client_id",
+      "relname": "task",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "contact_id",
+      "relname": "task",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "deal_id",
+      "relname": "task",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "description",
+      "relname": "task",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "due_date",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "task_priority",
+      "attname": "priority",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": "'medium'::task_priority",
+      "attgenerated": ""
+    },
+    {
+      "type": "task_status",
+      "attname": "status",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": "'todo'::task_status",
+      "attgenerated": ""
+    },
+    {
+      "type": "task_type",
+      "attname": "type",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": "'other'::task_type",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "user_id",
+      "relname": "task",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "admin_user_id",
+      "relname": "teardown_log",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "jsonb",
+      "attname": "counts",
+      "relname": "teardown_log",
+      "attnotnull": true,
+      "expression": "'{}'::jsonb",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "teardown_log",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "teardown_log",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "organization_id",
+      "relname": "teardown_log",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "source_id",
+      "relname": "teardown_log",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "source_name",
+      "relname": "teardown_log",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "ban_expires",
+      "relname": "user",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "ban_reason",
+      "relname": "user",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "banned",
+      "relname": "user",
+      "attnotnull": false,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "user",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "department",
+      "relname": "user",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "email",
+      "relname": "user",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "boolean",
+      "attname": "email_verified",
+      "relname": "user",
+      "attnotnull": true,
+      "expression": "false",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "user",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "image",
+      "relname": "user",
+      "attnotnull": false,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "name",
+      "relname": "user",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "role",
+      "relname": "user",
+      "attnotnull": false,
+      "expression": "'user'::text",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "user",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "created_at",
+      "relname": "verification",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "expires_at",
+      "relname": "verification",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "id",
+      "relname": "verification",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "identifier",
+      "relname": "verification",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    },
+    {
+      "type": "timestamp without time zone",
+      "attname": "updated_at",
+      "relname": "verification",
+      "attnotnull": true,
+      "expression": "now()",
+      "attgenerated": ""
+    },
+    {
+      "type": "text",
+      "attname": "value",
+      "relname": "verification",
+      "attnotnull": true,
+      "expression": null,
+      "attgenerated": ""
+    }
+  ],
+  "indexes": [
+    {
+      "indexdef": "CREATE UNIQUE INDEX account_pkey ON public.account USING btree (id)",
+      "indexname": "account_pkey",
+      "tablename": "account"
+    },
+    {
+      "indexdef": "CREATE INDEX \"account_userId_idx\" ON public.account USING btree (user_id)",
+      "indexname": "account_userId_idx",
+      "tablename": "account"
+    },
+    {
+      "indexdef": "CREATE INDEX \"apikey_configId_idx\" ON public.apikey USING btree (config_id)",
+      "indexname": "apikey_configId_idx",
+      "tablename": "apikey"
+    },
+    {
+      "indexdef": "CREATE INDEX apikey_key_idx ON public.apikey USING btree (key)",
+      "indexname": "apikey_key_idx",
+      "tablename": "apikey"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX apikey_pkey ON public.apikey USING btree (id)",
+      "indexname": "apikey_pkey",
+      "tablename": "apikey"
+    },
+    {
+      "indexdef": "CREATE INDEX \"apikey_referenceId_idx\" ON public.apikey USING btree (reference_id)",
+      "indexname": "apikey_referenceId_idx",
+      "tablename": "apikey"
+    },
+    {
+      "indexdef": "CREATE INDEX card_accepted_idx ON public.card USING btree (accepted)",
+      "indexname": "card_accepted_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX card_category_idx ON public.card USING btree (category)",
+      "indexname": "card_category_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_organizationId_idx\" ON public.card USING btree (organization_id)",
+      "indexname": "card_organizationId_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX card_pkey ON public.card USING btree (id)",
+      "indexname": "card_pkey",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX card_priority_idx ON public.card USING btree (priority)",
+      "indexname": "card_priority_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_resultOrderId_idx\" ON public.card USING btree (result_order_id)",
+      "indexname": "card_resultOrderId_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_resultTaskId_idx\" ON public.card USING btree (result_task_id)",
+      "indexname": "card_resultTaskId_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_ruleId_idx\" ON public.card USING btree (rule_id)",
+      "indexname": "card_ruleId_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_sourceItemId_idx\" ON public.card USING btree (source_item_id)",
+      "indexname": "card_sourceItemId_idx",
+      "tablename": "card"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX card_client_card_id_client_id_pk ON public.card_client USING btree (card_id, client_id)",
+      "indexname": "card_client_card_id_client_id_pk",
+      "tablename": "card_client"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_client_clientId_idx\" ON public.card_client USING btree (client_id)",
+      "indexname": "card_client_clientId_idx",
+      "tablename": "card_client"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX card_contact_card_id_contact_id_pk ON public.card_contact USING btree (card_id, contact_id)",
+      "indexname": "card_contact_card_id_contact_id_pk",
+      "tablename": "card_contact"
+    },
+    {
+      "indexdef": "CREATE INDEX card_contact_contactid_idx ON public.card_contact USING btree (contact_id)",
+      "indexname": "card_contact_contactid_idx",
+      "tablename": "card_contact"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX card_user_card_id_user_id_pk ON public.card_user USING btree (card_id, user_id)",
+      "indexname": "card_user_card_id_user_id_pk",
+      "tablename": "card_user"
+    },
+    {
+      "indexdef": "CREATE INDEX \"card_user_userId_idx\" ON public.card_user USING btree (user_id)",
+      "indexname": "card_user_userId_idx",
+      "tablename": "card_user"
+    },
+    {
+      "indexdef": "CREATE INDEX \"client_enrichmentStatus_idx\" ON public.client USING btree (enrichment_status)",
+      "indexname": "client_enrichmentStatus_idx",
+      "tablename": "client"
+    },
+    {
+      "indexdef": "CREATE INDEX \"client_organizationId_idx\" ON public.client USING btree (organization_id)",
+      "indexname": "client_organizationId_idx",
+      "tablename": "client"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX client_pkey ON public.client USING btree (id)",
+      "indexname": "client_pkey",
+      "tablename": "client"
+    },
+    {
+      "indexdef": "CREATE INDEX client_status_idx ON public.client USING btree (status)",
+      "indexname": "client_status_idx",
+      "tablename": "client"
+    },
+    {
+      "indexdef": "CREATE INDEX \"client_userId_idx\" ON public.client USING btree (user_id)",
+      "indexname": "client_userId_idx",
+      "tablename": "client"
+    },
+    {
+      "indexdef": "CREATE INDEX \"contact_clientId_idx\" ON public.contact USING btree (client_id)",
+      "indexname": "contact_clientId_idx",
+      "tablename": "contact"
+    },
+    {
+      "indexdef": "CREATE INDEX \"contact_organizationId_idx\" ON public.contact USING btree (organization_id)",
+      "indexname": "contact_organizationId_idx",
+      "tablename": "contact"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX contact_pkey ON public.contact USING btree (id)",
+      "indexname": "contact_pkey",
+      "tablename": "contact"
+    },
+    {
+      "indexdef": "CREATE INDEX contact_status_idx ON public.contact USING btree (status)",
+      "indexname": "contact_status_idx",
+      "tablename": "contact"
+    },
+    {
+      "indexdef": "CREATE INDEX \"contact_userId_idx\" ON public.contact USING btree (user_id)",
+      "indexname": "contact_userId_idx",
+      "tablename": "contact"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_clientId_idx\" ON public.deal USING btree (client_id)",
+      "indexname": "deal_clientId_idx",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_funnelStageId_idx\" ON public.deal USING btree (funnel_stage_id)",
+      "indexname": "deal_funnelStageId_idx",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_organizationId_idx\" ON public.deal USING btree (organization_id)",
+      "indexname": "deal_organizationId_idx",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX deal_pkey ON public.deal USING btree (id)",
+      "indexname": "deal_pkey",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE INDEX deal_stage_position_idx ON public.deal USING btree (funnel_stage_id, \"position\")",
+      "indexname": "deal_stage_position_idx",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE INDEX deal_status_idx ON public.deal USING btree (status)",
+      "indexname": "deal_status_idx",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_userId_idx\" ON public.deal USING btree (user_id)",
+      "indexname": "deal_userId_idx",
+      "tablename": "deal"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_activity_createdAt_idx\" ON public.deal_activity USING btree (created_at)",
+      "indexname": "deal_activity_createdAt_idx",
+      "tablename": "deal_activity"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_activity_dealId_idx\" ON public.deal_activity USING btree (deal_id)",
+      "indexname": "deal_activity_dealId_idx",
+      "tablename": "deal_activity"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX deal_activity_pkey ON public.deal_activity USING btree (id)",
+      "indexname": "deal_activity_pkey",
+      "tablename": "deal_activity"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_contact_contactId_idx\" ON public.deal_contact USING btree (contact_id)",
+      "indexname": "deal_contact_contactId_idx",
+      "tablename": "deal_contact"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX deal_contact_deal_id_contact_id_pk ON public.deal_contact USING btree (deal_id, contact_id)",
+      "indexname": "deal_contact_deal_id_contact_id_pk",
+      "tablename": "deal_contact"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_funnel_stage_isActive_idx\" ON public.deal_funnel_stage USING btree (is_active)",
+      "indexname": "deal_funnel_stage_isActive_idx",
+      "tablename": "deal_funnel_stage"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_funnel_stage_isSystem_idx\" ON public.deal_funnel_stage USING btree (is_system)",
+      "indexname": "deal_funnel_stage_isSystem_idx",
+      "tablename": "deal_funnel_stage"
+    },
+    {
+      "indexdef": "CREATE INDEX \"deal_funnel_stage_ownerOrganizationId_idx\" ON public.deal_funnel_stage USING btree (owner_organization_id)",
+      "indexname": "deal_funnel_stage_ownerOrganizationId_idx",
+      "tablename": "deal_funnel_stage"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX deal_funnel_stage_pkey ON public.deal_funnel_stage USING btree (id)",
+      "indexname": "deal_funnel_stage_pkey",
+      "tablename": "deal_funnel_stage"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX discovery_blocklist_org_kind_key_uidx ON public.discovery_blocklist USING btree (organization_id, kind, match_key)",
+      "indexname": "discovery_blocklist_org_kind_key_uidx",
+      "tablename": "discovery_blocklist"
+    },
+    {
+      "indexdef": "CREATE INDEX discovery_blocklist_organizationid_idx ON public.discovery_blocklist USING btree (organization_id)",
+      "indexname": "discovery_blocklist_organizationid_idx",
+      "tablename": "discovery_blocklist"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX discovery_blocklist_pkey ON public.discovery_blocklist USING btree (id)",
+      "indexname": "discovery_blocklist_pkey",
+      "tablename": "discovery_blocklist"
+    },
+    {
+      "indexdef": "CREATE INDEX invitation_email_idx ON public.invitation USING btree (email)",
+      "indexname": "invitation_email_idx",
+      "tablename": "invitation"
+    },
+    {
+      "indexdef": "CREATE INDEX \"invitation_organizationId_idx\" ON public.invitation USING btree (organization_id)",
+      "indexname": "invitation_organizationId_idx",
+      "tablename": "invitation"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX invitation_pkey ON public.invitation USING btree (id)",
+      "indexname": "invitation_pkey",
+      "tablename": "invitation"
+    },
+    {
+      "indexdef": "CREATE INDEX \"member_organizationId_idx\" ON public.member USING btree (organization_id)",
+      "indexname": "member_organizationId_idx",
+      "tablename": "member"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX member_pkey ON public.member USING btree (id)",
+      "indexname": "member_pkey",
+      "tablename": "member"
+    },
+    {
+      "indexdef": "CREATE INDEX \"member_userId_idx\" ON public.member USING btree (user_id)",
+      "indexname": "member_userId_idx",
+      "tablename": "member"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX notification_read_state_pkey ON public.notification_read_state USING btree (organization_id, user_id)",
+      "indexname": "notification_read_state_pkey",
+      "tablename": "notification_read_state"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_clientId_idx\" ON public.\"order\" USING btree (client_id)",
+      "indexname": "order_clientId_idx",
+      "tablename": "order"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_orderDate_idx\" ON public.\"order\" USING btree (order_date)",
+      "indexname": "order_orderDate_idx",
+      "tablename": "order"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_organizationId_idx\" ON public.\"order\" USING btree (organization_id)",
+      "indexname": "order_organizationId_idx",
+      "tablename": "order"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX order_pkey ON public.\"order\" USING btree (id)",
+      "indexname": "order_pkey",
+      "tablename": "order"
+    },
+    {
+      "indexdef": "CREATE INDEX order_status_idx ON public.\"order\" USING btree (status)",
+      "indexname": "order_status_idx",
+      "tablename": "order"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_userId_idx\" ON public.\"order\" USING btree (user_id)",
+      "indexname": "order_userId_idx",
+      "tablename": "order"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX order_access_link_one_active_idx ON public.order_access_link USING btree (order_id) WHERE (status = 'active'::order_link_status)",
+      "indexname": "order_access_link_one_active_idx",
+      "tablename": "order_access_link"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_access_link_orderId_idx\" ON public.order_access_link USING btree (order_id)",
+      "indexname": "order_access_link_orderId_idx",
+      "tablename": "order_access_link"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX order_access_link_pkey ON public.order_access_link USING btree (id)",
+      "indexname": "order_access_link_pkey",
+      "tablename": "order_access_link"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX \"order_access_link_tokenHash_idx\" ON public.order_access_link USING btree (token_hash)",
+      "indexname": "order_access_link_tokenHash_idx",
+      "tablename": "order_access_link"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_item_orderId_idx\" ON public.order_item USING btree (order_id)",
+      "indexname": "order_item_orderId_idx",
+      "tablename": "order_item"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX order_item_pkey ON public.order_item USING btree (id)",
+      "indexname": "order_item_pkey",
+      "tablename": "order_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_item_productId_idx\" ON public.order_item USING btree (product_id)",
+      "indexname": "order_item_productId_idx",
+      "tablename": "order_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_request_clientId_idx\" ON public.order_request USING btree (client_id)",
+      "indexname": "order_request_clientId_idx",
+      "tablename": "order_request"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_request_orderId_idx\" ON public.order_request USING btree (order_id)",
+      "indexname": "order_request_orderId_idx",
+      "tablename": "order_request"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_request_organizationId_idx\" ON public.order_request USING btree (organization_id)",
+      "indexname": "order_request_organizationId_idx",
+      "tablename": "order_request"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX order_request_pkey ON public.order_request USING btree (id)",
+      "indexname": "order_request_pkey",
+      "tablename": "order_request"
+    },
+    {
+      "indexdef": "CREATE INDEX order_request_status_idx ON public.order_request USING btree (status)",
+      "indexname": "order_request_status_idx",
+      "tablename": "order_request"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_request_userId_idx\" ON public.order_request USING btree (user_id)",
+      "indexname": "order_request_userId_idx",
+      "tablename": "order_request"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX order_request_item_pkey ON public.order_request_item USING btree (id)",
+      "indexname": "order_request_item_pkey",
+      "tablename": "order_request_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"order_request_item_requestId_idx\" ON public.order_request_item USING btree (request_id)",
+      "indexname": "order_request_item_requestId_idx",
+      "tablename": "order_request_item"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX org_identity_entry_org_kind_key_uidx ON public.org_identity_entry USING btree (organization_id, kind, match_key)",
+      "indexname": "org_identity_entry_org_kind_key_uidx",
+      "tablename": "org_identity_entry"
+    },
+    {
+      "indexdef": "CREATE INDEX org_identity_entry_organizationid_idx ON public.org_identity_entry USING btree (organization_id)",
+      "indexname": "org_identity_entry_organizationid_idx",
+      "tablename": "org_identity_entry"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX org_identity_entry_pkey ON public.org_identity_entry USING btree (id)",
+      "indexname": "org_identity_entry_pkey",
+      "tablename": "org_identity_entry"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX organization_pkey ON public.organization USING btree (id)",
+      "indexname": "organization_pkey",
+      "tablename": "organization"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX organization_slug_uidx ON public.organization USING btree (slug)",
+      "indexname": "organization_slug_uidx",
+      "tablename": "organization"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX organization_slug_unique ON public.organization USING btree (slug)",
+      "indexname": "organization_slug_unique",
+      "tablename": "organization"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX pipeline_run_pkey ON public.pipeline_run USING btree (id)",
+      "indexname": "pipeline_run_pkey",
+      "tablename": "pipeline_run"
+    },
+    {
+      "indexdef": "CREATE INDEX \"pipeline_run_startedAt_idx\" ON public.pipeline_run USING btree (started_at)",
+      "indexname": "pipeline_run_startedAt_idx",
+      "tablename": "pipeline_run"
+    },
+    {
+      "indexdef": "CREATE INDEX product_category_idx ON public.product USING btree (category)",
+      "indexname": "product_category_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX product_is_drink_idx ON public.product USING btree (is_drink)",
+      "indexname": "product_is_drink_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX product_name_idx ON public.product USING btree (name)",
+      "indexname": "product_name_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX product_name_norm_trgm_idx ON public.product USING gin (name_norm gin_trgm_ops)",
+      "indexname": "product_name_norm_trgm_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX \"product_organizationId_idx\" ON public.product USING btree (organization_id)",
+      "indexname": "product_organizationId_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX product_pkey ON public.product USING btree (id)",
+      "indexname": "product_pkey",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX product_region_norm_trgm_idx ON public.product USING gin (region_norm gin_trgm_ops)",
+      "indexname": "product_region_norm_trgm_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX product_search_vector_idx ON public.product USING gin (search_vector)",
+      "indexname": "product_search_vector_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE INDEX product_status_idx ON public.product USING btree (status)",
+      "indexname": "product_status_idx",
+      "tablename": "product"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX product_alias_org_alias_uniq ON public.product_alias USING btree (organization_id, alias_norm)",
+      "indexname": "product_alias_org_alias_uniq",
+      "tablename": "product_alias"
+    },
+    {
+      "indexdef": "CREATE INDEX product_alias_org_idx ON public.product_alias USING btree (organization_id)",
+      "indexname": "product_alias_org_idx",
+      "tablename": "product_alias"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX product_alias_pkey ON public.product_alias USING btree (id)",
+      "indexname": "product_alias_pkey",
+      "tablename": "product_alias"
+    },
+    {
+      "indexdef": "CREATE INDEX \"rule_organizationId_idx\" ON public.rule USING btree (organization_id)",
+      "indexname": "rule_organizationId_idx",
+      "tablename": "rule"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX rule_pkey ON public.rule USING btree (id)",
+      "indexname": "rule_pkey",
+      "tablename": "rule"
+    },
+    {
+      "indexdef": "CREATE INDEX rule_type_idx ON public.rule USING btree (type)",
+      "indexname": "rule_type_idx",
+      "tablename": "rule"
+    },
+    {
+      "indexdef": "CREATE INDEX \"rule_userId_idx\" ON public.rule USING btree (user_id)",
+      "indexname": "rule_userId_idx",
+      "tablename": "rule"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX session_pkey ON public.session USING btree (id)",
+      "indexname": "session_pkey",
+      "tablename": "session"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX session_token_unique ON public.session USING btree (token)",
+      "indexname": "session_token_unique",
+      "tablename": "session"
+    },
+    {
+      "indexdef": "CREATE INDEX \"session_userId_idx\" ON public.session USING btree (user_id)",
+      "indexname": "session_userId_idx",
+      "tablename": "session"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_isSystem_idx\" ON public.source USING btree (is_system)",
+      "indexname": "source_isSystem_idx",
+      "tablename": "source"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_ownerOrganizationId_idx\" ON public.source USING btree (owner_organization_id)",
+      "indexname": "source_ownerOrganizationId_idx",
+      "tablename": "source"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX source_pkey ON public.source USING btree (id)",
+      "indexname": "source_pkey",
+      "tablename": "source"
+    },
+    {
+      "indexdef": "CREATE INDEX source_provider_idx ON public.source USING btree (provider)",
+      "indexname": "source_provider_idx",
+      "tablename": "source"
+    },
+    {
+      "indexdef": "CREATE INDEX source_status_idx ON public.source USING btree (status)",
+      "indexname": "source_status_idx",
+      "tablename": "source"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_templateId_idx\" ON public.source USING btree (template_id)",
+      "indexname": "source_templateId_idx",
+      "tablename": "source"
+    },
+    {
+      "indexdef": "CREATE INDEX source_item_org_attribution_own_idx ON public.source_item USING btree (organization_id) WHERE (org_attribution = 'own_org'::org_attribution)",
+      "indexname": "source_item_org_attribution_own_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_org_sourceCreatedAt_idx\" ON public.source_item USING btree (organization_id, source_created_at)",
+      "indexname": "source_item_org_sourceCreatedAt_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_organizationId_idx\" ON public.source_item USING btree (organization_id)",
+      "indexname": "source_item_organizationId_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_parentSourceItemId_idx\" ON public.source_item USING btree (parent_source_item_id)",
+      "indexname": "source_item_parentSourceItemId_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_parseStatus_pending_idx\" ON public.source_item USING btree (parse_status) WHERE (parse_status = ANY (ARRAY['pending'::parse_status, 'failed'::parse_status]))",
+      "indexname": "source_item_parseStatus_pending_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX source_item_pkey ON public.source_item USING btree (id)",
+      "indexname": "source_item_pkey",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_r2UploadStatus_pending_idx\" ON public.source_item USING btree (r2_upload_status) WHERE (r2_upload_status = ANY (ARRAY['pending'::r2_upload_status, 'failed'::r2_upload_status]))",
+      "indexname": "source_item_r2UploadStatus_pending_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_sourceId_idx\" ON public.source_item USING btree (source_id)",
+      "indexname": "source_item_sourceId_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX source_item_source_external_uidx ON public.source_item USING btree (source_id, external_id)",
+      "indexname": "source_item_source_external_uidx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_item_threadExternalId_idx\" ON public.source_item USING btree (thread_external_id)",
+      "indexname": "source_item_threadExternalId_idx",
+      "tablename": "source_item"
+    },
+    {
+      "indexdef": "CREATE INDEX \"source_template_isDefault_idx\" ON public.source_template USING btree (is_default)",
+      "indexname": "source_template_isDefault_idx",
+      "tablename": "source_template"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX source_template_pkey ON public.source_template USING btree (id)",
+      "indexname": "source_template_pkey",
+      "tablename": "source_template"
+    },
+    {
+      "indexdef": "CREATE INDEX source_template_provider_idx ON public.source_template USING btree (provider)",
+      "indexname": "source_template_provider_idx",
+      "tablename": "source_template"
+    },
+    {
+      "indexdef": "CREATE INDEX source_template_status_idx ON public.source_template USING btree (status)",
+      "indexname": "source_template_status_idx",
+      "tablename": "source_template"
+    },
+    {
+      "indexdef": "CREATE INDEX \"task_assigneeId_idx\" ON public.task USING btree (assignee_id)",
+      "indexname": "task_assigneeId_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE INDEX \"task_clientId_idx\" ON public.task USING btree (client_id)",
+      "indexname": "task_clientId_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE INDEX \"task_contactId_idx\" ON public.task USING btree (contact_id)",
+      "indexname": "task_contactId_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE INDEX \"task_dealId_idx\" ON public.task USING btree (deal_id)",
+      "indexname": "task_dealId_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE INDEX \"task_organizationId_idx\" ON public.task USING btree (organization_id)",
+      "indexname": "task_organizationId_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX task_pkey ON public.task USING btree (id)",
+      "indexname": "task_pkey",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE INDEX task_status_idx ON public.task USING btree (status)",
+      "indexname": "task_status_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE INDEX \"task_userId_idx\" ON public.task USING btree (user_id)",
+      "indexname": "task_userId_idx",
+      "tablename": "task"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX teardown_log_pkey ON public.teardown_log USING btree (id)",
+      "indexname": "teardown_log_pkey",
+      "tablename": "teardown_log"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX user_email_unique ON public.\"user\" USING btree (email)",
+      "indexname": "user_email_unique",
+      "tablename": "user"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX user_pkey ON public.\"user\" USING btree (id)",
+      "indexname": "user_pkey",
+      "tablename": "user"
+    },
+    {
+      "indexdef": "CREATE INDEX verification_identifier_idx ON public.verification USING btree (identifier)",
+      "indexname": "verification_identifier_idx",
+      "tablename": "verification"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX verification_pkey ON public.verification USING btree (id)",
+      "indexname": "verification_pkey",
+      "tablename": "verification"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "immutable_unaccent",
+      "definition": "CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE STRICT\nAS $function$ SELECT public.unaccent('public.unaccent', $1) $function$\n"
+    },
+    {
+      "proname": "to_or_tsquery",
+      "definition": "CREATE OR REPLACE FUNCTION public.to_or_tsquery(t text)\n RETURNS tsquery\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\nAS $function$\n        SELECT to_tsquery('simple',\n          nullif(\n            array_to_string(\n              array(\n                SELECT x\n                FROM unnest(string_to_array(\n                  regexp_replace(lower(coalesce(t, '')), '[^a-z0-9 ]+', ' ', 'g'),\n                  ' ')) AS x\n                WHERE x <> ''\n              ),\n              ' | '\n            ),\n            ''\n          )\n        )\n      $function$\n"
+    },
+    {
+      "proname": "translit_cyr_lat",
+      "definition": "CREATE OR REPLACE FUNCTION public.translit_cyr_lat(t text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE STRICT\nAS $function$\n        SELECT translate(\n          regexp_replace(\n          regexp_replace(\n          regexp_replace(\n          regexp_replace(\n          regexp_replace(\n          regexp_replace(\n          regexp_replace(\n            lower(coalesce(t, '')),\n            'ж', 'zh', 'g'),\n            'ц', 'ts', 'g'),\n            'ч', 'ch', 'g'),\n            'ш', 'sh', 'g'),\n            'щ', 'shch', 'g'),\n            'ю', 'yu', 'g'),\n            'я', 'ya', 'g'),\n          'абвгдеёзийклмнопрстуфхыэъь',\n          'abvgdeeziyklmnoprstufhye'\n        )\n      $function$\n"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "account_pkey",
+      "relname": "account",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "account_user_id_user_id_fk",
+      "relname": "account",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "apikey_pkey",
+      "relname": "apikey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "card_organization_id_organization_id_fk",
+      "relname": "card",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "card_pkey",
+      "relname": "card",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "card_result_order_id_order_id_fk",
+      "relname": "card",
+      "definition": "FOREIGN KEY (result_order_id) REFERENCES \"order\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "card_result_task_id_task_id_fk",
+      "relname": "card",
+      "definition": "FOREIGN KEY (result_task_id) REFERENCES task(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "card_rule_id_rule_id_fk",
+      "relname": "card",
+      "definition": "FOREIGN KEY (rule_id) REFERENCES rule(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "card_source_item_id_source_item_id_fk",
+      "relname": "card",
+      "definition": "FOREIGN KEY (source_item_id) REFERENCES source_item(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "card_client_card_id_card_id_fk",
+      "relname": "card_client",
+      "definition": "FOREIGN KEY (card_id) REFERENCES card(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "card_client_card_id_client_id_pk",
+      "relname": "card_client",
+      "definition": "PRIMARY KEY (card_id, client_id)"
+    },
+    {
+      "conname": "card_client_client_id_client_id_fk",
+      "relname": "card_client",
+      "definition": "FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "card_contact_card_id_contact_id_pk",
+      "relname": "card_contact",
+      "definition": "PRIMARY KEY (card_id, contact_id)"
+    },
+    {
+      "conname": "card_contact_card_id_fkey",
+      "relname": "card_contact",
+      "definition": "FOREIGN KEY (card_id) REFERENCES card(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "card_contact_contact_id_fkey",
+      "relname": "card_contact",
+      "definition": "FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "card_user_card_id_card_id_fk",
+      "relname": "card_user",
+      "definition": "FOREIGN KEY (card_id) REFERENCES card(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "card_user_card_id_user_id_pk",
+      "relname": "card_user",
+      "definition": "PRIMARY KEY (card_id, user_id)"
+    },
+    {
+      "conname": "card_user_user_id_user_id_fk",
+      "relname": "card_user",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "client_organization_id_organization_id_fk",
+      "relname": "client",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "client_pkey",
+      "relname": "client",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "client_user_id_user_id_fk",
+      "relname": "client",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "contact_client_id_client_id_fk",
+      "relname": "contact",
+      "definition": "FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "contact_organization_id_organization_id_fk",
+      "relname": "contact",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "contact_pkey",
+      "relname": "contact",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "contact_user_id_user_id_fk",
+      "relname": "contact",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_client_id_client_id_fk",
+      "relname": "deal",
+      "definition": "FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "deal_funnel_stage_id_deal_funnel_stage_id_fk",
+      "relname": "deal",
+      "definition": "FOREIGN KEY (funnel_stage_id) REFERENCES deal_funnel_stage(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "deal_organization_id_organization_id_fk",
+      "relname": "deal",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_pkey",
+      "relname": "deal",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "deal_user_id_user_id_fk",
+      "relname": "deal",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_activity_actor_user_id_fkey",
+      "relname": "deal_activity",
+      "definition": "FOREIGN KEY (actor_user_id) REFERENCES \"user\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "deal_activity_deal_id_fkey",
+      "relname": "deal_activity",
+      "definition": "FOREIGN KEY (deal_id) REFERENCES deal(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_activity_from_stage_id_fkey",
+      "relname": "deal_activity",
+      "definition": "FOREIGN KEY (from_stage_id) REFERENCES deal_funnel_stage(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "deal_activity_pkey",
+      "relname": "deal_activity",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "deal_activity_to_stage_id_fkey",
+      "relname": "deal_activity",
+      "definition": "FOREIGN KEY (to_stage_id) REFERENCES deal_funnel_stage(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "deal_contact_contact_id_contact_id_fk",
+      "relname": "deal_contact",
+      "definition": "FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_contact_deal_id_contact_id_pk",
+      "relname": "deal_contact",
+      "definition": "PRIMARY KEY (deal_id, contact_id)"
+    },
+    {
+      "conname": "deal_contact_deal_id_deal_id_fk",
+      "relname": "deal_contact",
+      "definition": "FOREIGN KEY (deal_id) REFERENCES deal(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_funnel_stage_owner_organization_id_organization_id_fk",
+      "relname": "deal_funnel_stage",
+      "definition": "FOREIGN KEY (owner_organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "deal_funnel_stage_pkey",
+      "relname": "deal_funnel_stage",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "discovery_blocklist_created_by_user_id_fkey",
+      "relname": "discovery_blocklist",
+      "definition": "FOREIGN KEY (created_by_user_id) REFERENCES \"user\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "discovery_blocklist_organization_id_fkey",
+      "relname": "discovery_blocklist",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "discovery_blocklist_pkey",
+      "relname": "discovery_blocklist",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "invitation_inviter_id_user_id_fk",
+      "relname": "invitation",
+      "definition": "FOREIGN KEY (inviter_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "invitation_organization_id_organization_id_fk",
+      "relname": "invitation",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "invitation_pkey",
+      "relname": "invitation",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "member_organization_id_organization_id_fk",
+      "relname": "member",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "member_pkey",
+      "relname": "member",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "member_user_id_user_id_fk",
+      "relname": "member",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "notification_read_state_organization_id_fkey",
+      "relname": "notification_read_state",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "notification_read_state_pkey",
+      "relname": "notification_read_state",
+      "definition": "PRIMARY KEY (organization_id, user_id)"
+    },
+    {
+      "conname": "notification_read_state_user_id_fkey",
+      "relname": "notification_read_state",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_client_id_client_id_fk",
+      "relname": "order",
+      "definition": "FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "order_organization_id_organization_id_fk",
+      "relname": "order",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_pkey",
+      "relname": "order",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "order_user_id_user_id_fk",
+      "relname": "order",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_access_link_order_id_order_id_fk",
+      "relname": "order_access_link",
+      "definition": "FOREIGN KEY (order_id) REFERENCES \"order\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_access_link_pkey",
+      "relname": "order_access_link",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "order_item_order_id_order_id_fk",
+      "relname": "order_item",
+      "definition": "FOREIGN KEY (order_id) REFERENCES \"order\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_item_pkey",
+      "relname": "order_item",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "order_item_product_id_product_id_fk",
+      "relname": "order_item",
+      "definition": "FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "order_request_client_id_client_id_fk",
+      "relname": "order_request",
+      "definition": "FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "order_request_order_id_order_id_fk",
+      "relname": "order_request",
+      "definition": "FOREIGN KEY (order_id) REFERENCES \"order\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "order_request_organization_id_organization_id_fk",
+      "relname": "order_request",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_request_pkey",
+      "relname": "order_request",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "order_request_user_id_user_id_fk",
+      "relname": "order_request",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "order_request_item_pkey",
+      "relname": "order_request_item",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "order_request_item_request_id_order_request_id_fk",
+      "relname": "order_request_item",
+      "definition": "FOREIGN KEY (request_id) REFERENCES order_request(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "org_identity_entry_created_by_user_id_fkey",
+      "relname": "org_identity_entry",
+      "definition": "FOREIGN KEY (created_by_user_id) REFERENCES \"user\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "org_identity_entry_organization_id_fkey",
+      "relname": "org_identity_entry",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "org_identity_entry_pkey",
+      "relname": "org_identity_entry",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "organization_pkey",
+      "relname": "organization",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "organization_slug_unique",
+      "relname": "organization",
+      "definition": "UNIQUE (slug)"
+    },
+    {
+      "conname": "pipeline_run_pkey",
+      "relname": "pipeline_run",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "product_organization_id_organization_id_fk",
+      "relname": "product",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "product_pkey",
+      "relname": "product",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "product_alias_organization_id_fkey",
+      "relname": "product_alias",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "product_alias_pkey",
+      "relname": "product_alias",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "rule_organization_id_organization_id_fk",
+      "relname": "rule",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "rule_pkey",
+      "relname": "rule",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "rule_user_id_user_id_fk",
+      "relname": "rule",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "session_pkey",
+      "relname": "session",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "session_token_unique",
+      "relname": "session",
+      "definition": "UNIQUE (token)"
+    },
+    {
+      "conname": "session_user_id_user_id_fk",
+      "relname": "session",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "source_created_by_user_id_user_id_fk",
+      "relname": "source",
+      "definition": "FOREIGN KEY (created_by_user_id) REFERENCES \"user\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "source_owner_organization_id_organization_id_fk",
+      "relname": "source",
+      "definition": "FOREIGN KEY (owner_organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "source_pkey",
+      "relname": "source",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "source_template_id_source_template_id_fk",
+      "relname": "source",
+      "definition": "FOREIGN KEY (template_id) REFERENCES source_template(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "source_item_organization_id_organization_id_fk",
+      "relname": "source_item",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "source_item_parent_source_item_id_source_item_id_fk",
+      "relname": "source_item",
+      "definition": "FOREIGN KEY (parent_source_item_id) REFERENCES source_item(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "source_item_pkey",
+      "relname": "source_item",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "source_item_source_id_source_id_fk",
+      "relname": "source_item",
+      "definition": "FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "source_template_pkey",
+      "relname": "source_template",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "task_assignee_id_user_id_fk",
+      "relname": "task",
+      "definition": "FOREIGN KEY (assignee_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "task_client_id_client_id_fk",
+      "relname": "task",
+      "definition": "FOREIGN KEY (client_id) REFERENCES client(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "task_contact_id_contact_id_fk",
+      "relname": "task",
+      "definition": "FOREIGN KEY (contact_id) REFERENCES contact(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "task_deal_id_deal_id_fk",
+      "relname": "task",
+      "definition": "FOREIGN KEY (deal_id) REFERENCES deal(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "task_organization_id_organization_id_fk",
+      "relname": "task",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "task_pkey",
+      "relname": "task",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "task_user_id_user_id_fk",
+      "relname": "task",
+      "definition": "FOREIGN KEY (user_id) REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "teardown_log_admin_user_id_fkey",
+      "relname": "teardown_log",
+      "definition": "FOREIGN KEY (admin_user_id) REFERENCES \"user\"(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "teardown_log_organization_id_fkey",
+      "relname": "teardown_log",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "teardown_log_pkey",
+      "relname": "teardown_log",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "user_email_unique",
+      "relname": "user",
+      "definition": "UNIQUE (email)"
+    },
+    {
+      "conname": "user_pkey",
+      "relname": "user",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "verification_pkey",
+      "relname": "verification",
+      "definition": "PRIMARY KEY (id)"
+    }
+  ]
+}

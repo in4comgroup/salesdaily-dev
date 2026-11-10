@@ -19,7 +19,8 @@ config.yaml
 # Local-only material
 docs
 refs
-scripts
+scripts/*
+!scripts/migrations/
 data_migration
 WhatsAppChatHistory
 *.dump

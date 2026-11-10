@@ -1,0 +1,38 @@
+name: migration-integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  postgres17:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: migration-test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/migrations/package.cjs /tmp/crm-migration-runtime
+      - run: NODE_PATH=/tmp/crm-migration-runtime node -e 'if (!require("pg").Client) process.exit(1)'
+        working-directory: /tmp
+      - run: node scripts/migrations/test.cjs
+        env:
+          MIGRATION_TEST_DATABASE_URL: postgresql://postgres:migration-test-only@localhost:5432/postgres
+      - run: bash scripts/migrations/test-deploy.sh

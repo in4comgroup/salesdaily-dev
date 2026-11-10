@@ -57,7 +57,8 @@ stale-ui-updates.md
 /.swc
 
 # scripts
-/scripts
+/scripts/*
+!/scripts/migrations/
 /data_migration
 
 # data imports
@@ -65,5 +66,8 @@ stale-ui-updates.md
 
 .idea
 
-docs/deploy
+docs/deploy/*
+!docs/deploy/database-migrations.md
 OVERVIEW.md
+# Local Drizzle SQL drafts are not deployment migrations
+/tmp/drizzle-drafts/

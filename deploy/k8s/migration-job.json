@@ -1,0 +1,12 @@
+{
+ "apiVersion":"batch/v1", "kind":"Job",
+ "metadata":{"name":"REPLACED","namespace":"salesdaily"},
+ "spec":{"backoffLimit":0,"activeDeadlineSeconds":600,"ttlSecondsAfterFinished":86400,
+ "template":{"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never",
+ "imagePullSecrets":[{"name":"ghcr-pull"}],
+ "securityContext":{"runAsNonRoot":true,"runAsUser":1001,"runAsGroup":1001},
+ "containers":[{"name":"migrate","image":"REPLACED","command":["node","scripts/migrations/run.cjs","apply"],
+ "env":[{"name":"DATABASE_URL","valueFrom":{"secretKeyRef":{"name":"crm-env","key":"DATABASE_URL"}}}],
+ "resources":{"requests":{"cpu":"100m","memory":"128Mi"},"limits":{"memory":"256Mi"}},
+ "securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}}
+}

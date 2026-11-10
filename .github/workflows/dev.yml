@@ -62,6 +62,9 @@ permissions:
   packages: write
 
 jobs:
+  migration-check:
+    uses: ./.github/workflows/migrations.yml
+
   build:
     # Auto on push to main; on manual runs only if the box is ticked.
     if: github.event_name == 'push' || inputs.build
@@ -128,12 +131,13 @@ jobs:
   deploy:
     # Manual runs only. A skipped build is fine (image already exists /
     # rollback); a failed or cancelled one blocks the deploy.
-    needs: build
+    needs: [build, migration-check]
     if: >-
       !cancelled() && github.event_name == 'workflow_dispatch' && inputs.deploy &&
-      (needs.build.result == 'success' || needs.build.result == 'skipped')
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      needs.migration-check.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     environment: dev
     concurrency:
       group: deploy-dev
@@ -203,11 +207,26 @@ jobs:
           # or the token is wrong — before anything is changed.
           kubectl get deploy crm -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 
+      - name: Resolve immutable release digest
+        id: release
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+          echo "ref=${IMAGE_REF%:*}@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Migrate database before rollout
+        env:
+          MIGRATION_IMAGE: ${{ steps.release.outputs.ref }}
+          MIGRATION_JOB: crm-migrate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash scripts/migrations/deploy.sh
+
       - name: Apply manifests
         run: |
           cd deploy/k8s/app
           # Whatever the image is named in the manifests → this repo's image + tag.
-          kustomize edit set image "ghcr.io/artuomvproskunin/ru-crm-v1=${{ steps.image.outputs.ref }}"
+          kustomize edit set image "ghcr.io/artuomvproskunin/ru-crm-v1=${{ steps.release.outputs.ref }}"
           cd -
           kubectl apply -k deploy/k8s/app
 

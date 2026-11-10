@@ -45,13 +45,15 @@ ENV RESEND_API_KEY=re_build_placeholder \
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
+RUN node scripts/migrations/package.cjs /app/migration-runtime/node_modules
 
 # ── runner ──────────────────────────────────────────────────────────────
 FROM node:${NODE_VERSION} AS runner
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    NODE_PATH=/app/migration-runtime/node_modules
 WORKDIR /app
 
 RUN groupadd --system --gid 1001 nodejs && \
@@ -60,6 +62,12 @@ RUN groupadd --system --gid 1001 nodejs && \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+COPY --from=builder --chown=nextjs:nodejs /app/migration-runtime ./migration-runtime
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrations ./scripts/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/db/baseline/0000_baseline.sql ./db/baseline/0000_baseline.sql
+COPY --from=builder --chown=nextjs:nodejs /app/db/baseline/0001_deal_funnel_stage_settings.sql ./db/baseline/0001_deal_funnel_stage_settings.sql
+COPY --from=builder --chown=nextjs:nodejs /app/db/migrations ./db/migrations
 
 USER nextjs
 EXPOSE 3000

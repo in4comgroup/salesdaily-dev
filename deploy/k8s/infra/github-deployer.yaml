@@ -60,6 +60,10 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list", "create", "update", "patch"]
+  # Jobs are created with unique run names; TTL controller cleans them up.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get"]
   - apiGroups: ["batch"]
     resources: ["cronjobs"]
     verbs: ["get", "list", "create", "update", "patch"]

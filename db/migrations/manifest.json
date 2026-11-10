@@ -1,0 +1,4 @@
+[
+  "../baseline/0000_baseline.sql",
+  "../baseline/0001_deal_funnel_stage_settings.sql"
+]

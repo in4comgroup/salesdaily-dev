@@ -19,9 +19,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm build` — production build (`output: "standalone"` — what the Docker image ships). Needs ~8 GB RAM; type-checking is skipped (`typescript.ignoreBuildErrors`).
 - `docker build --build-arg NEXT_PUBLIC_APP_URL=https://dev.salesdaily.ru -t crm:test .` — local image build (see **Deployment** below).
 - `pnpm lint` — ESLint
-- `npx drizzle-kit push` — push schema changes to database. **⚠ Caution:** a blanket `push` currently wants to **drop the Search V2 generated columns** on `product` (`name_norm`, `is_drink`, `search_vector`, …) — they live in the DB via raw SQL DDL (`scripts/search-v2/`) but aren't in `schema.ts`, so `push` reads them as deletions and prompts a data-loss confirmation (which fails non-interactively). For **additive** changes (new enum value / nullable column / new table / index) apply the specific SQL directly (`psql` or a one-off script over `pg`) instead. The historical per-feature scripts (`scripts/add-*.ts`) used the Neon `neon()` HTTP driver, which is no longer a dependency — port any you need to `pg`. The full schema snapshot (incl. the Search V2 functions / generated columns / GIN indexes `schema.ts` doesn't know about) is `db/baseline/0000_baseline.sql`.
-- `npx drizzle-kit generate` — generate migration files
-- `npx drizzle-kit migrate` — run migrations
+- `pnpm db:migrate` — apply the versioned SQL sequence through `scripts/migrations/run.cjs`; only use against an explicitly authorized database.
+- `pnpm db:migrations:status` — verify migration history/checksums and report applied/available counts; requires an authorized database connection.
+- `npx drizzle-kit generate` — optional SQL **drafts only** in `tmp/drizzle-drafts`; review and extract the intended change into the canonical SQL sequence below.
+- **Do not run `drizzle-kit push` or `drizzle-kit migrate` against project environments.** They bypass the canonical runner/history; push can remove Search V2 objects absent from `schema.ts`.
+
+## Database migrations — rules for code generation
+
+Before changing database-backed code or `src/db/schema.ts`, read
+[docs/deploy/database-migrations.md](docs/deploy/database-migrations.md), inspect
+`db/migrations/manifest.json` and the relevant existing SQL.
+
+- **Every schema change needs reviewed SQL in the same change as the code.** Updating `schema.ts` alone does not migrate PostgreSQL. For ORM-managed objects, keep SQL and `schema.ts` consistent; SQL also owns functions, generated columns and indexes intentionally absent from the ORM model.
+- **One migration history:** `db/migrations/manifest.json` is the ordered executable sequence; `crm_migrations.history` is its database journal. Add the next consecutively numbered `db/migrations/NNNN_description.sql` and append its path to the manifest. Do not introduce a second runner, Drizzle journal, startup migration, initContainer or per-replica migration.
+- **Applied SQL is immutable.** Do not edit/rename/remove historical files, rewrite journal checksums, reorder entries, or regenerate the registration fixture to hide drift. Make corrections with a new migration. Preserve `db/baseline/0000_baseline.sql` and `0001_deal_funnel_stage_settings.sql` byte-for-byte. `crm-current-schema.sql` is a diagnostic snapshot, never an executable migration.
+- **Preserve PostgreSQL objects outside `schema.ts`**, especially Search V2 functions, product generated columns and GIN/trigram indexes. Never treat their absence from the ORM model as permission to drop them. Generated Drizzle output is only a draft and may contain an unwanted full schema creation.
+- **Design for rolling deployment:** migration Job runs before rollout while old replicas still serve requests. Prefer additive expand/contract changes; stage renames, type changes, NOT NULL and removals across compatible releases. Explain lock/rewrite impact and compatibility with the previous application version. No destructive operations or automatic database rollback by default.
+- **New SQL runs inside a runner-owned transaction:** no BEGIN/COMMIT/ROLLBACK or commands requiring execution outside a transaction (e.g. CREATE INDEX CONCURRENTLY). Separate enum addition from use of its new value. Keep long backfills out of deployment migrations; plan bounded, resumable batches separately.
+- **Verify on disposable PostgreSQL 17**, both from empty and from the previous schema with representative test data. Run `MIGRATION_TEST_DATABASE_URL="$TEST_DATABASE_URL" node scripts/migrations/test.cjs` and `bash scripts/migrations/test-deploy.sh`; add change-specific checks for resulting schema/data and preservation of relevant manual objects. Report actual checks separately from checks awaiting CI/cluster access. Never infer PG17 acceptance from PG16-only tests.
+- **Existing environments require explicit operator registration** of 0000+0001 using `register-existing`, with its schema validation intact. Do not automatically register, replay baseline on a nonempty database, or skip checks based on one table. Registration, applying SQL to existing environments and changing the cluster require separate authorization.
+- **Deployment uses `.github/workflows/dev.yml`:** one managed Kubernetes Job uses the same image digest/SQL/runner as the application, reads DATABASE_URL from the existing cluster Secret, and must succeed before Deployment changes. Preserve the failure/timeout gate. A shorter/changed migration history in an old image must fail; application rollback requires compatible code packaged with current migration history, never an automatic database rollback.
+- Do not read/print real secrets or env files, copy DATABASE_URL into GitHub, or log connection strings/SQL data. `pg` accepts `sslmode=no-verify`; libpq clients (`psql`/`pg_dump`) require a separately prepared compatible SSL configuration. Use variable names/examples in commands and documentation.
 
 ## Tech Stack
 
