@@ -226,7 +226,7 @@ jobs:
         run: |
           cd deploy/k8s/app
           # Whatever the image is named in the manifests → this repo's image + tag.
-          kustomize edit set image "ghcr.io/artuomvproskunin/ru-crm-v1=${{ steps.release.outputs.ref }}"
+          kustomize edit set image "ghcr.io/in4comgroup/salesdaily-dev=${{ steps.release.outputs.ref }}"
           cd -
           kubectl apply -k deploy/k8s/app
 

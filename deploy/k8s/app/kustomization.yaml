@@ -14,7 +14,7 @@ resources:
   - ingress.yaml
   - cronjob.yaml
 images:
-  - name: ghcr.io/artuomvproskunin/ru-crm-v1
+  - name: ghcr.io/in4comgroup/salesdaily-dev
     # NOT the source of truth for what runs: the `deploy` workflow
     # (.github/workflows/deploy.yml) overrides name + tag on its runner and
     # never commits it. Don't `kubectl apply -k` from a laptop without first

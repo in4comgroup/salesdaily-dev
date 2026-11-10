@@ -43,7 +43,7 @@ spec:
         runAsGroup: 1001
       containers:
         - name: app
-          image: ghcr.io/artuomvproskunin/ru-crm-v1   # tag set in kustomization.yaml
+          image: ghcr.io/in4comgroup/salesdaily-dev   # tag set in kustomization.yaml
           ports:
             - name: http
               containerPort: 3000

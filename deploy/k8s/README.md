@@ -77,7 +77,7 @@ verify → rollback): `docs/deploy/k8s-release.md`. The tag in
 ```bash
 # pin the image built by the docker-image workflow
 (cd deploy/k8s/app && kustomize edit set image \
-  ghcr.io/artuomvproskunin/ru-crm-v1=ghcr.io/artuomvproskunin/ru-crm-v1:dev-sha-<short>)
+  ghcr.io/in4comgroup/salesdaily-dev=ghcr.io/in4comgroup/salesdaily-dev:dev-sha-<short>)
 
 kubectl apply -k deploy/k8s/app
 kubectl -n salesdaily rollout status deploy/crm

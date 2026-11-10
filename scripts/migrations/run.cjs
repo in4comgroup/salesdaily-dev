@@ -3,6 +3,7 @@ const { Client } = require('pg');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { normalizeCatalog } = require('./catalog.cjs');
 const root = path.resolve(__dirname, '../..');
 const mode = process.argv[2] || 'apply';
 const hash = x => crypto.createHash('sha256').update(x).digest('hex');
@@ -31,7 +32,7 @@ async function main() {
     if (mode === 'register-existing') {
       if (history.length) throw Error('Registration requires empty history');
       const expected = JSON.parse(fs.readFileSync(path.join(root,'db/migrations/existing-schema.json')));
-      if (JSON.stringify(await catalog()) !== JSON.stringify(expected)) throw Error('Existing schema differs from verified 0000+0001 catalog; registration refused');
+      if (JSON.stringify(normalizeCatalog(await catalog())) !== JSON.stringify(normalizeCatalog(expected))) throw Error('Existing schema differs from verified 0000+0001 catalog; registration refused');
     } else if (!history.length) {
       const objects = await client.query("SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','S') UNION ALL SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='e' UNION ALL SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid=p.oid AND d.classid='pg_proc'::regclass AND d.deptype='e') LIMIT 1");
       if (objects.rowCount) throw Error('Nonempty database without history: explicit registration required');
