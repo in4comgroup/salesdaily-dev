@@ -3,18 +3,18 @@ import { readFileSync } from "node:fs"
 import { Client } from "pg"
 import { AiConfigurationError, type AiConfig } from "../../src/server/ai/config"
 import { prepareAiConfigDocument } from "../../src/server/ai/config-document"
-import { LEGACY_MODEL_URI_ENV } from "../../src/server/ai/yandex-connection"
 
 // Load an AI configuration document into the database (docs/ai/config-in-db-spec.md):
 //
-//   node --env-file=<env file> tools/ai/run.mjs seed [--input file] [--comment text] [--replace] [--dry-run]
+//   node --env-file=<env file> tools/ai/run.mjs seed --input <file> [--comment text] [--replace] [--dry-run]
 //
-// 1. Reads the JSON (default: deploy/k8s/app/ai-config.json) and checks the schema.
-// 2. Copies model URIs that the document does not have from
-//    YANDEX_AI_TEXT_MODEL_URI / YANDEX_AI_VISION_MODEL_URI.
-// 3. Builds the runtime with the current env, without network requests: keys,
-//    folder and URIs of everything enabled must be present and valid.
-// 4. Inserts the document as the active `ai_config_version` row (DATABASE_URL).
+// Normally versions are edited in Settings → «Модели» → «Маршруты ИИ». This
+// script is for loading a document from a file (for example a saved copy).
+//
+// 1. Reads the JSON file (--input, required) and checks the schema.
+// 2. Builds the runtime with the current env, without network requests: keys
+//    and folder for everything enabled must be present, URIs in that folder.
+// 3. Inserts the document as the active `ai_config_version` row (DATABASE_URL).
 //    An active version already there → stops, unless --replace (then the new
 //    row becomes active and the old one stays as history). Same document as
 //    the active one → nothing to do.
@@ -25,12 +25,11 @@ import { LEGACY_MODEL_URI_ENV } from "../../src/server/ai/yandex-connection"
 // Same check as the admin save (src/server/ai/config-document.ts).
 export const prepareSeedDocument = prepareAiConfigDocument
 
-function summary(config: AiConfig, filledUris: string[]) {
+function summary(config: AiConfig) {
   const on = (value: boolean) => (value ? "on" : "off")
   console.log("Models:")
   for (const [id, model] of Object.entries(config.models)) {
-    const uri = model.uri ? (filledUris.includes(id) ? `URI from ${LEGACY_MODEL_URI_ENV[id]}` : "URI in document") : "no URI"
-    console.log(`  ${id}: ${on(model.enabled)}, ${uri}`)
+    console.log(`  ${id}: ${on(model.enabled)}, ${model.uri ? "URI set" : "no URI"}`)
   }
   const tasks = Object.entries(config.tasks)
   console.log(`Tasks on: ${tasks.filter(([, t]) => t.enabled).map(([id]) => id).join(", ") || "none"}`)
@@ -41,20 +40,21 @@ function summary(config: AiConfig, filledUris: string[]) {
 
 async function main() {
   const { values } = parseArgs({ options: {
-    input: { type: "string", default: "deploy/k8s/app/ai-config.json" },
+    input: { type: "string" },
     comment: { type: "string" },
     replace: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
   } })
+  if (!values.input) throw new AiConfigurationError("--input <file> is required")
   let input: unknown
   try {
     input = JSON.parse(readFileSync(values.input!, "utf8"))
   } catch {
     throw new AiConfigurationError(`Cannot read ${values.input} as JSON`)
   }
-  const { config, filledUris } = prepareSeedDocument(input, process.env)
+  const config = prepareSeedDocument(input, process.env)
   console.log(`Configuration ${values.input}: valid; keys, folder and URIs present (not verified with Yandex).`)
-  summary(config, filledUris)
+  summary(config)
   if (values["dry-run"]) {
     console.log("Dry run: nothing written.")
     return

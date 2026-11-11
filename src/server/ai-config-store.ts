@@ -2,7 +2,6 @@ import "server-only"
 
 import { sql } from "drizzle-orm"
 import { db } from "@/db/drizzle"
-import { loadAiConfig } from "@/server/ai/config"
 import { createAiConfigStore, type AiConfigStoreState } from "@/server/ai/config-store"
 import { setAiRuntime } from "@/server/ai/resolve"
 
@@ -27,8 +26,6 @@ function createDbStore(): Store {
   return createAiConfigStore({
     env: process.env,
     apply: setAiRuntime,
-    // The ConfigMap file is the fallback until stage 4 removes it.
-    readFile: () => (process.env.AI_CONFIG_PATH?.trim() ? loadAiConfig(process.env) : null),
     source: {
       async readActiveId() {
         const result = await db.execute<{ id: string }>(sql`

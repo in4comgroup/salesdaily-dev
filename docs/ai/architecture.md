@@ -4,7 +4,7 @@
 
 ## С чего начать чтение
 
-1. [config/ai/yandex.json](../../config/ai/yandex.json) — исходная конфигурация целевого провайдера.
+1. [config-in-db-spec.md](config-in-db-spec.md) — где хранится конфигурация (таблица `ai_config_version`) и как её меняют («Настройки → Модели → Маршруты ИИ»).
 2. [config.ts](../../src/server/ai/config.ts) — схема JSON, список задач, возможностей и проверка зависимостей.
 3. [resolve.ts](../../src/server/ai/resolve.ts) — создание runtime, выбор модели и доступ к сервисам.
 4. [policy.ts](../../src/server/ai/policy.ts) и [registry.ts](../../src/server/ai/registry.ts) — запреты и обязательные возможности моделей.
@@ -19,7 +19,7 @@
 
 ```mermaid
 flowchart TD
-    DB["ai_config_version (БД), иначе JSON по AI_CONFIG_PATH"] --> Runtime["getAiRuntime: конфигурация, политика, зависимости"]
+    DB["ai_config_version (БД)"] --> Runtime["getAiRuntime: конфигурация, политика, зависимости"]
     Env["Серверные env / Kubernetes Secret"] --> Runtime
     API["API / серверная функция / парсер"] --> Runtime
     Runtime --> Resolve["resolve: task + необязательный modelId"]
@@ -54,7 +54,7 @@ flowchart TD
 | `models` | Внутренний ID, подпись, `uri` (необязательно), `capabilities` (`text`, `structuredOutput`, `tools`, `streaming`, `image`), `enabled` |
 | `tasks` | Доступность прикладной задачи, `defaultModel`, `allowedModels`; автоматических fallback нет |
 
-`yandex-text` и `yandex-vision` — внутренние ID конфигурации. URI модели (`gpt://<folder>/...`) — поле `uri`; если его нет, берётся из `YANDEX_AI_TEXT_MODEL_URI` / `YANDEX_AI_VISION_MODEL_URI` (переходный период до переноса в БД). Клиент выбирает внутренний ID; переданный клиентом ID снова проверяется сервером.
+`yandex-text` и `yandex-vision` — внутренние ID конфигурации. URI модели (`gpt://<folder>/...`) — поле `uri`, обязательное для включённой модели. Клиент выбирает внутренний ID; переданный клиентом ID снова проверяется сервером.
 
 [config.ts](../../src/server/ai/config.ts) использует строгую Zod-схему: неизвестные поля (в том числе старые `policy`, `connections`, `preprocessing`), битые ссылки, задачи без включённой модели и несогласованные зависимости отвергаются. Ошибки показывают пути полей без исходных значений. Зависимости: `parsePdf` требует `services.ocr`; `parseAudio` и серверный микрофон — `services.speech`; `webSearch` и `companyResearch` — `services.search`; `parseImage` при `images=vision` — включённый `describeImage`; `parseVideo` включить нельзя.
 
@@ -62,15 +62,9 @@ flowchart TD
 
 [resolve.ts](../../src/server/ai/resolve.ts) создаёт приватную копию конфигурации/env, адаптер Yandex и включённые сервисы. Проверяет адрес API, ключи, каталог, URI моделей и baseline-возможности задач **без сетевых запросов**. URI должен принадлежать каталогу `YANDEX_AI_FOLDER_ID`. Ключи/URI нужны для всех включённых моделей/сервисов, даже если конкретная задача ещё не запускалась. Если ничего не включено (`blocked.json`), env не нужны.
 
-Откуда берётся конфигурация (с этапа 2 [config-in-db-spec.md](config-in-db-spec.md)): [instrumentation.ts](../../src/instrumentation.ts) при запуске Node.js (кроме production build) вызывает `startAiConfigStore()` ([ai-config-store.ts](../../src/server/ai-config-store.ts)). Порядок: активная версия из таблицы `ai_config_version` → иначе JSON по `AI_CONFIG_PATH` (ConfigMap, до этапа 4) → иначе AI выключен. Неверная активная версия выключает AI (файл не используется). Каждые 30 с store проверяет активную версию и заменяет runtime без перезапуска pod. Ошибка конфигурации не останавливает приложение. Правила выбора — [config-store.ts](../../src/server/ai/config-store.ts); runtime хранится на `globalThis` (`setAiRuntime` / `getAiRuntime` в `resolve.ts`). Версии редактирует админ платформы: «Настройки → Модели → Маршруты ИИ» ([admin-llm-routing.ts](../../src/server/admin-llm-routing.ts), [ai-routing.tsx](../../src/components/blocks/admin-llm-models/ai-routing.tsx)); загрузка из файла — `node --env-file=<env> tools/ai/run.mjs seed` ([seed.ts](../../tools/ai/seed.ts)). Обе дороги проверяют документ одинаково ([config-document.ts](../../src/server/ai/config-document.ts)). CLI и тесты без store строят runtime из файла.
+Откуда берётся конфигурация: [instrumentation.ts](../../src/instrumentation.ts) при запуске Node.js (кроме production build) вызывает `startAiConfigStore()` ([ai-config-store.ts](../../src/server/ai-config-store.ts)) и ждёт загрузки активной версии из таблицы `ai_config_version`. Нет версии, БД недоступна или версия неверна → AI выключен, остальная CRM работает. Каждые 30 с store проверяет активную версию и заменяет runtime без перезапуска pod. Правила выбора — [config-store.ts](../../src/server/ai/config-store.ts); runtime хранится на `globalThis` (`setAiRuntime` / `getAiRuntime` в `resolve.ts`). Версии редактирует админ платформы: «Настройки → Модели → Маршруты ИИ» ([admin-llm-routing.ts](../../src/server/admin-llm-routing.ts), [ai-routing.tsx](../../src/components/blocks/admin-llm-models/ai-routing.tsx)); загрузка из файла — `node --env-file=<env> tools/ai/run.mjs seed --input <file>` ([seed.ts](../../tools/ai/seed.ts)). Обе дороги проверяют документ одинаково ([config-document.ts](../../src/server/ai/config-document.ts)). JSON-файлов конфигурации в репозитории и на кластере больше нет (11 ноября 2026 года).
 
-Профили:
-
-- [yandex.json](../../config/ai/yandex.json): один исходный региональный профиль, новые функции по умолчанию выключены, текстовые включены.
-- `legacy.json` (Gemini/GPT/Claude через Vercel Gateway) и адаптер Gateway удалены 11 ноября 2026 года.
-- [blocked.json](../../config/ai/blocked.json): AI выключен, AI-ключи не требуются.
-
-Наследования и объединения JSON нет. Прежний экспериментальный `yandex-media.json` больше не используется.
+Тестовые документы (бывшие `config/ai/yandex.json` и `blocked.json`) — [tools/ai/fixtures.ts](../../tools/ai/fixtures.ts) и `DISABLED_AI_CONFIG` в `config.ts`.
 
 ## Модели и сетевой транспорт
 
@@ -191,25 +185,23 @@ Worklet должен поставляться вместе с `public/` и бы�
 
 | Файл | Назначение |
 | --- | --- |
-| [run.mjs](../../tools/ai/run.mjs) | Обёртка команд `profile`, `check`, `test`: компилирует ограниченный граф TypeScript во временный каталог и запускает Node с server-условиями; нативный tsx/esbuild не нужен |
-| [profile.ts](../../tools/ai/profile.ts) | `buildStage3Profile`: включает полный выбранный список функций и зависимости, проверяет схему, пишет явную копию JSON для деплоя; `video` отвергается. Удаляется на этапе 4 [config-in-db-spec.md](config-in-db-spec.md) |
+| [run.mjs](../../tools/ai/run.mjs) | Обёртка команд `check`, `test`, `seed`: компилирует ограниченный граф TypeScript во временный каталог и запускает Node с server-условиями; нативный tsx/esbuild не нужен |
 | [seed.ts](../../tools/ai/seed.ts) | `seed`: проверяет JSON и env без сети, дописывает URI моделей из env, пишет активную версию в `ai_config_version` (`--dry-run`, `--replace`) |
-| [check.ts](../../tools/ai/check.ts) | Проверка runtime без сети либо явные платные синтетические пробы text/structured/tools/stream/image/pdf; env-файлы автоматически не загружает |
+| [check.ts](../../tools/ai/check.ts) | Проверка документа из файла (`--config`, обязательно) и runtime без сети либо явные платные синтетические пробы text/structured/tools/stream/image/pdf; env-файлы автоматически не загружает |
 | [synthetic-media.ts](../../tools/ai/synthetic-media.ts) | PNG/PDF для проб без чтения пользовательских файлов |
 | [runtime.test.ts](../../tools/ai/runtime.test.ts) | Политика, адаптеры, сервисы, mock HTTP, форматы файлов, ошибки/очистка, PCM/WAV и AudioWorklet |
 
-`profile` не читает ключи и не вызывает провайдера. Он не накладывает изменения поверх развёрнутого ConfigMap, а формирует полный файл из выбранного input. `--enable` — полный список новых функций, не добавление к предыдущему списку. `check` без `--probe` проверяет конфигурацию и наличие/формат активных env; успешный результат не подтверждает настоящий ключ, квоту или права. `--debug` относится к синтетическим модельным пробам; не включать подобный вывод содержимого для реальных CRM-запросов без отдельного решения.
+`check --config <файл>` без `--probe` проверяет конфигурацию и наличие/формат активных env; успешный результат не подтверждает настоящий ключ, квоту или права. `--debug` относится к синтетическим модельным пробам; не включать подобный вывод содержимого для реальных CRM-запросов без отдельного решения.
 
 Прикладной AI-код не использует локальные декодеры. Временный каталог у `tools/ai/run.mjs` нужен для компиляции CLI и не является предобработкой клиентских медиафайлов.
 
 ## Kubernetes и источник работающей конфигурации
 
-- [deploy/k8s/app/ai-config.json](../../deploy/k8s/app/ai-config.json) — JSON, который реально берёт deploy из выбранной ветки. Изменение только `config/ai/yandex.json` не пересоздаёт его автоматически.
-- [kustomization.yaml](../../deploy/k8s/app/kustomization.yaml) генерирует ConfigMap `crm-ai-config`, без суффикса-хеша.
-- [deployment.yaml](../../deploy/k8s/app/deployment.yaml) монтирует JSON в `/etc/crm-ai/ai-config.json`, задаёт `AI_CONFIG_PATH`, получает env из Secret `crm-env`.
-- [env.example](../../deploy/k8s/app/env.example) перечисляет переменные; значений секретов в репозитории быть не должно. PDF использует `YANDEX_OCR_API_KEY`, аудио/микрофон — `YANDEX_SPEECH_API_KEY`, поиск — `YANDEX_SEARCH_API_KEY`; изображения используют AI-ключ и vision URI.
-- [.github/workflows/dev.yml](../../.github/workflows/dev.yml) делает checkout ветки и `kubectl apply -k deploy/k8s/app`. Сам `profile` не запускает; Secret приложения не обновляет. Push в main собирает образ, deploy запускается вручную.
-- Изменение кода требует нового образа. Изменение только JSON/Secret с тем же образом требует явного rollout restart: runtime кешируется, а ConfigMap имеет стабильное имя.
+- Конфигурация маршрутов — в БД (`ai_config_version`), не в манифестах. ConfigMap `crm-ai-config`, монтирование `/etc/crm-ai` и `AI_CONFIG_PATH` удалены из [deployment.yaml](../../deploy/k8s/app/deployment.yaml) и [kustomization.yaml](../../deploy/k8s/app/kustomization.yaml) 11 ноября 2026 года. Сам ConfigMap на кластере удаляет оператор (у `github-deployer` нет права на удаление).
+- [deployment.yaml](../../deploy/k8s/app/deployment.yaml) получает env из Secret `crm-env`.
+- [env.example](../../deploy/k8s/app/env.example) перечисляет переменные; значений секретов в репозитории быть не должно. Модели: `YANDEX_AI_API_KEY`, `YANDEX_AI_FOLDER_ID`, необязательный `YANDEX_AI_API_URL`; PDF — `YANDEX_OCR_API_KEY`, аудио/микрофон — `YANDEX_SPEECH_API_KEY`, поиск — `YANDEX_SEARCH_API_KEY`. URI моделей — в БД, не в env.
+- [.github/workflows/dev.yml](../../.github/workflows/dev.yml) делает checkout ветки и `kubectl apply -k deploy/k8s/app`; Secret приложения не обновляет. Push в main собирает образ, deploy запускается вручную.
+- Изменение кода требует нового образа. Изменение маршрутов — в UI, действует за ≤ 30 с без перезапуска. Изменение Secret требует rollout restart.
 
 Пошаговые команды: [stage-3-check.md](stage-3-check.md), [ai-configuration.md](../deploy/ai-configuration.md), [local-run.md](../deploy/local-run.md). Развёртывание выполняет владелец окружения.
 

@@ -21,14 +21,6 @@ export const YANDEX_SERVICE_KEY_ENV: Record<ServiceName, string> = {
   search: "YANDEX_SEARCH_API_KEY",
 }
 
-// Model URIs used to live in env. A model without `uri` in the configuration
-// document still reads it from here (removed in stage 4 of
-// docs/ai/config-in-db-spec.md).
-export const LEGACY_MODEL_URI_ENV: Record<string, string> = {
-  "yandex-text": "YANDEX_AI_TEXT_MODEL_URI",
-  "yandex-vision": "YANDEX_AI_VISION_MODEL_URI",
-}
-
 // Origin of the Yandex AI Studio API. Chat Completions are at `<origin>/v1`,
 // Vision OCR at `<origin>/ocr/v1`. Unset → the public default.
 export function resolveYandexApiUrl(env: AiEnvironment): string {

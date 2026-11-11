@@ -1,6 +1,5 @@
 import "server-only"
 
-import { readFileSync } from "node:fs"
 import { z } from "zod"
 
 export const AI_TASKS = [
@@ -31,9 +30,7 @@ export const YANDEX_MODEL_URI = /^gpt:\/\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9._/-]+$/
 const modelSchema = z.strictObject({
   enabled: z.boolean(),
   label: z.string().trim().min(1),
-  // Empty = the legacy env variable for this model ID (yandex-connection.ts,
-  // LEGACY_MODEL_URI_ENV). Stage 2 of docs/ai/config-in-db-spec.md moves URIs
-  // into the database.
+  // Full model URI. Required for an enabled model (rule below).
   uri: z.string().regex(YANDEX_MODEL_URI).optional(),
   capabilities: z.array(z.enum(AI_CAPABILITIES)).min(1),
 })
@@ -85,6 +82,9 @@ export const aiConfigSchema = z.strictObject({
     issue(["services", "search"], "Web search and company research require the Search API service")
   }
   if (on("parseVideo")) issue(["tasks", "parseVideo"], "Video processing is unavailable with the Yandex APIs")
+  for (const [modelId, model] of Object.entries(config.models)) {
+    if (model.enabled && !model.uri) issue(["models", modelId, "uri"], "Enabled model needs a URI")
+  }
 
   for (const [taskId, task] of Object.entries(config.tasks)) {
     for (const modelId of task.allowedModels) {
@@ -137,18 +137,4 @@ export function parseAiConfig(input: unknown): AiConfig {
     throw new AiConfigurationError(`Invalid AI configuration at: ${issues.join(", ")}`)
   }
   return result.data
-}
-
-// Reads the JSON document named by AI_CONFIG_PATH. Replaced by the database
-// store in stage 2 of docs/ai/config-in-db-spec.md.
-export function loadAiConfig(env: AiEnvironment = process.env): AiConfig {
-  const path = env.AI_CONFIG_PATH?.trim()
-  if (!path) throw new AiConfigurationError("AI_CONFIG_PATH is required; no default AI route is enabled")
-  let input: unknown
-  try {
-    input = JSON.parse(readFileSync(path, "utf8"))
-  } catch {
-    throw new AiConfigurationError("Cannot read AI_CONFIG_PATH as JSON")
-  }
-  return parseAiConfig(input)
 }

@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url"
 const require = createRequire(import.meta.url)
 
 const [command, ...args] = process.argv.slice(2)
-if (!["check", "test", "profile", "seed"].includes(command)) {
-  console.error("Usage: node tools/ai/run.mjs check [--config path] [--probe task] [--model id] [--debug] | test | profile --output path --enable images,pdf,audio,search,voice | seed [--input file] [--comment text] [--replace] [--dry-run]")
+if (!["check", "test", "seed"].includes(command)) {
+  console.error("Usage: node tools/ai/run.mjs check --config path [--probe task] [--model id] [--debug] | test | seed --input file [--comment text] [--replace] [--dry-run]")
   process.exitCode = 1
 } else {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
@@ -22,7 +22,7 @@ if (!["check", "test", "profile", "seed"].includes(command)) {
       "--target", "es2022", "--module", "commonjs", "--moduleResolution", "node",
       "--skipLibCheck", "--strict", "--esModuleInterop", "--rootDir", root,
       "--outDir", output, "--pretty", "false",
-      "src/server/ai/index.ts", "tools/ai/check.ts", "tools/ai/runtime.test.ts", "tools/ai/profile.ts", "tools/ai/seed.ts",
+      "src/server/ai/index.ts", "tools/ai/check.ts", "tools/ai/runtime.test.ts", "tools/ai/seed.ts",
     ], { cwd: root, stdio: "inherit" })
     if (compilation.error || compilation.status !== 0) {
       console.error("AI tooling compilation failed")
@@ -30,7 +30,7 @@ if (!["check", "test", "profile", "seed"].includes(command)) {
     } else {
       const result = spawnSync(process.execPath, [
         "--conditions=react-server",
-        path.join(output, "tools/ai", { test: "runtime.test.js", profile: "profile.js", seed: "seed.js", check: "check.js" }[command]),
+        path.join(output, "tools/ai", { test: "runtime.test.js", seed: "seed.js", check: "check.js" }[command]),
         ...args,
       ], {
         cwd: root,

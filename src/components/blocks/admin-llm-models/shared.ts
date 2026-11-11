@@ -92,7 +92,7 @@ export const SKU_MODE_LABELS: Record<YandexSkuGroup["mode"], string> = {
 // Client price = our cost × (1 + markup / 100). Display only.
 export const withMarkup = (costRub: number, markupPercent: number) => costRub * (1 + markupPercent / 100)
 
-// AI task id (config/ai/*.json) → process name in the UI.
+// AI task id (AI configuration document) → process name in the UI.
 export const TASK_LABELS: Record<string, string> = {
   chat: "ИИ-чат",
   analytics: "Аналитика: ИИ ассистент",
@@ -206,20 +206,19 @@ export type AiConfigDoc = {
 
 export type AiRoutingState = {
   running: {
-    source: "database" | "file" | "disabled"
+    source: "database" | "disabled"
     versionId: number | null
     lastError: string | null
     checkedAt: string | null
   } | null
   activeVersionId: number | null
   document: AiConfigDoc
-  documentSource: "database" | "file" | "disabled"
+  documentSource: "database" | "disabled"
   versions: { id: number; comment: string | null; createdAt: string; createdByName: string | null; isActive: boolean }[]
   catalog: { tasks: string[]; capabilities: string[]; features: string[]; services: string[] }
   env: {
     apiUrl: string | null
     folderId: string | null
     keys: { name: string; present: boolean }[]
-    legacyModelUris: { modelId: string; name: string; present: boolean }[]
   }
 }

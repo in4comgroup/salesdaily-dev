@@ -6,13 +6,13 @@
 
 | Что | Где хранится | Кто меняет |
 | --- | --- | --- |
-| **Реестр маршрутов**: подключения, модели (`yandex-text`, `yandex-vision`), задачи, разрешённые модели, сервисы OCR / STT / поиск | JSON по `AI_CONFIG_PATH` (на кластере — ConfigMap `crm-ai-config` из `deploy/k8s/app/ai-config.json`) | Разработчик, через изменение JSON и деплой |
+| **Реестр маршрутов**: модели (`yandex-text`, `yandex-vision`, их URI), задачи, разрешённые модели, сервисы OCR / STT / поиск, функции | БД, таблица `ai_config_version` (версии; активна одна) — [config-in-db-spec.md](config-in-db-spec.md) | Админ платформы в «Настройки → Модели → Маршруты ИИ» |
 | **Реестр цен моделей** (₽ за 1 000 токенов, с датой начала действия) | БД, таблица `llm_model_price` | Автоматически из Yandex Billing API раз в сутки; вручную — админ в «Настройки → Модели» |
 | **Журнал вызовов** (одна строка на вызов модели) | БД, таблица `llm_usage` | Только приложение, автоматически |
 | **Настройки платформы**: дневной лимит по умолчанию, наценка, связи моделей с позициями прайса Yandex, результат последней синхронизации цен | БД, таблица `platform_setting` (ключ → jsonb) | Админ в «Настройки → Модели»; синхронизация цен |
 | **Настройки организации**: режим Topics, свой дневной лимит, системный пользователь Topics | БД, таблица `organization_settings` | Админ в «Настройки → Модели» |
 
-Важно: БД **не заменяет** JSON-конфигурацию. JSON решает, какие модели и сервисы разрешены и куда идёт запрос. БД хранит, сколько это стоило и кто это использовал. Без `AI_CONFIG_PATH` приложение не запускается (см. [architecture.md](architecture.md)).
+Маршруты решают, какие модели и сервисы включены и какая модель обслуживает процесс. Таблицы учёта хранят, сколько это стоило и кто это использовал.
 
 Таблицы созданы миграцией [0003_llm_usage_org_settings.sql](../../db/migrations/0003_llm_usage_org_settings.sql).
 
@@ -29,7 +29,7 @@ flowchart LR
 ```
 
 1. Вызывающий код просит модель для задачи: `getAiRuntime().resolve({ task, organizationId?, sourceItemId? })`.
-2. [resolve.ts](../../src/server/ai/resolve.ts) проверяет задачу и модель по JSON и политике, берёт URI модели из env (`YANDEX_AI_TEXT_MODEL_URI` и т. п.).
+2. [resolve.ts](../../src/server/ai/resolve.ts) проверяет задачу и модель по активной версии конфигурации и берёт URI модели из неё.
 3. [adapters/yandex.ts](../../src/server/ai/adapters/yandex.ts) создаёт OpenAI-совместимую модель AI SDK:
    - адрес только `https://ai.api.cloud.yandex.net/v1/chat/completions`, редиректы запрещены;
    - заголовки `Authorization: Api-Key <YANDEX_AI_API_KEY>`, `OpenAI-Project: <YANDEX_AI_FOLDER_ID>`, `x-data-logging-enabled: false`;
@@ -140,9 +140,8 @@ UI — «Настройки» (`/settings`):
 
 | Переменная | Обязательна | Назначение |
 | --- | --- | --- |
-| `AI_CONFIG_PATH` | Да | JSON-реестр маршрутов (на кластере задаётся в Deployment) |
 | `YANDEX_AI_API_KEY`, `YANDEX_AI_FOLDER_ID` | Для Yandex-профиля | Доступ к Chat Completions |
-| `YANDEX_AI_TEXT_MODEL_URI`, `YANDEX_AI_VISION_MODEL_URI` | Для включённых моделей | URI моделей в каталоге |
+| `YANDEX_AI_API_URL` | Нет | Адрес API (по умолчанию `https://ai.api.cloud.yandex.net`) |
 | `YANDEX_BILLING_SA_KEY`, `YANDEX_BILLING_ACCOUNT_ID` | Нет | Автоматические цены; без них — ручной ввод |
 
 Значения хранятся в Secret `crm-env`; список ключей — [env.example](../../deploy/k8s/app/env.example).

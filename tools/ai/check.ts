@@ -3,7 +3,8 @@ import { syntheticPng, syntheticPdf } from "./synthetic-media"
 import { parseArgs } from "node:util"
 import { generateText, streamText, Output, tool, stepCountIs } from "ai"
 import { z } from "zod"
-import { AI_TASKS, AiConfigurationError, loadAiConfig, type AiTask } from "../../src/server/ai/config"
+import { readFileSync } from "node:fs"
+import { AI_TASKS, AiConfigurationError, parseAiConfig, type AiTask } from "../../src/server/ai/config"
 import { createAiRuntime } from "../../src/server/ai/resolve"
 import { AiProbeError, formatAiCheckError } from "../../src/server/ai/errors"
 
@@ -13,7 +14,16 @@ async function main() {
     mode: { type: "string", default: "text" },
     debug: { type: "boolean", default: false },
   } })
-  const config = loadAiConfig({ ...process.env, AI_CONFIG_PATH: values.config ?? process.env.AI_CONFIG_PATH })
+  // A configuration document saved as JSON (for example exported from the
+  // database). The app itself reads only the database.
+  if (!values.config) throw new AiConfigurationError("--config <file> is required")
+  let input: unknown
+  try {
+    input = JSON.parse(readFileSync(values.config, "utf8"))
+  } catch {
+    throw new AiConfigurationError("Cannot read --config as JSON")
+  }
+  const config = parseAiConfig(input)
   let httpRequests = 0
   const runtime = createAiRuntime(config, process.env, undefined, values.debug ? (event) => {
     if (event.stage === "request") {

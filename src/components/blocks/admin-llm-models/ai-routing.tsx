@@ -59,7 +59,6 @@ const CAPABILITY_LABELS: Record<string, string> = {
 
 const SOURCE_LABELS: Record<AiRoutingState["documentSource"], string> = {
   database: "из БД",
-  file: "из файла (ConfigMap)",
   disabled: "ИИ выключен",
 }
 
@@ -189,7 +188,6 @@ export function AiRouting() {
             <RotateCcw className="size-4" />
             Сбросить изменения
           </Button>
-          {/* Without a database version the running configuration itself can be saved as version 1. */}
           <Button size="sm" onClick={save} disabled={saving || (!dirty && state.documentSource === "database")}>
             {saving ? <Loader className="size-4 animate-spin" /> : <Save className="size-4" />}
             Сохранить новую версию
@@ -214,8 +212,7 @@ export function AiRouting() {
         </p>
         {state.documentSource !== "database" && (
           <p className="text-amber-700 dark:text-amber-400">
-            В БД ещё нет активной версии. Ниже — работающая конфигурация {SOURCE_LABELS[state.documentSource]}.
-            Сохраните её, чтобы она стала версией 1 в БД.
+            В БД нет активной версии — ИИ выключен. Настройте процессы и модели ниже и сохраните версию.
           </p>
         )}
         {running?.lastError && <p className="text-xs text-destructive">Ошибка загрузки: {running.lastError}</p>}
@@ -325,7 +322,6 @@ export function AiRouting() {
             {modelIds.map((id) => {
               const model = doc.models[id]
               const setModel = (change: (m: AiModelDoc) => void) => edit((d) => change(d.models[id]))
-              const legacy = state.env.legacyModelUris.find((l) => l.modelId === id)
               return (
                 <TableRow key={id}>
                   <TableCell className="font-mono text-xs">{id}</TableCell>
@@ -343,7 +339,7 @@ export function AiRouting() {
                     <Input
                       className="w-72 font-mono text-xs"
                       value={model.uri ?? ""}
-                      placeholder={legacy?.present ? `из ${legacy.name} при сохранении` : `${folderPrefix}…`}
+                      placeholder={`${folderPrefix}…`}
                       onChange={(e) => setModel((m) => {
                         const value = e.target.value.trim()
                         if (value) m.uri = value
