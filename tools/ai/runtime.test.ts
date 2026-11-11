@@ -27,160 +27,10 @@ import {
   AiBudgetError, classifyAiError, normalizeUpstreamModel, registerAiUsageSink, withAiUsageContext,
   type AiUsageEvent, type AiUsageSink,
 } from "../../src/server/ai/usage"
-import { gatewayFixture } from "./gateway-fixture"
 
-const legacy = gatewayFixture
 function blocked() {
   return JSON.parse(readFileSync("config/ai/blocked.json", "utf8"))
 }
-const env = { AI_GATEWAY_API_KEY: "synthetic-test-key" }
-
-test("missing configuration fails even when a Gateway key exists", () => {
-  assert.throws(() => loadAiConfig(env), AiConfigurationError)
-  assert.throws(() => loadAiConfig({ AI_CONFIG_PATH: "/not-an-ai-config.json" }), AiConfigurationError)
-})
-
-test("strict schema rejects typos, unsupported adapters, foreign URLs and fallbacks", () => {
-  for (const change of [
-    (c: ReturnType<typeof legacy>) => { c.policy.allowAll = true },
-    (c: ReturnType<typeof legacy>) => { c.connections.vercel.adapter = "unknown" },
-    (c: ReturnType<typeof legacy>) => { c.connections.vercel.baseUrl = "https://example.com" },
-    (c: ReturnType<typeof legacy>) => { c.tasks.chat.fallbackModels = ["gpt-5-mini"] },
-  ]) {
-    const config = legacy()
-    change(config)
-    assert.throws(() => parseAiConfig(config), AiConfigurationError)
-  }
-})
-
-test("broken references and forbidden defaults fail configuration validation", () => {
-  for (const change of [
-    (c: ReturnType<typeof legacy>) => { c.policy.allowedConnections = ["unknown"] },
-    (c: ReturnType<typeof legacy>) => { c.models["gpt-5-mini"].connectionId = "unknown" },
-    (c: ReturnType<typeof legacy>) => { c.tasks.chat.allowedModels.push("unknown") },
-    (c: ReturnType<typeof legacy>) => { c.policy.allowedConnections = [] },
-    (c: ReturnType<typeof legacy>) => { c.connections.vercel.enabled = false },
-    (c: ReturnType<typeof legacy>) => { c.models["gemini-3.1-flash-lite"].enabled = false },
-  ]) {
-    const config = legacy()
-    change(config)
-    assert.throws(() => parseAiConfig(config), AiConfigurationError)
-  }
-})
-
-test("missing active credentials fail without SDK auth fallback", () => {
-  assert.throws(() => createAiRuntime(legacy(), {}), AiConfigurationError)
-  assert.throws(() => createAiRuntime(legacy(), { AI_GATEWAY_API_KEY: "  " }), AiConfigurationError)
-})
-
-test("fully blocked profile needs no credentials and denies every operation", () => {
-  const runtime = createAiRuntime(blocked(), {})
-  assert.deepEqual(runtime.listModels("chat"), [])
-  assert.throws(() => runtime.resolve({ task: "chat" }), AiPolicyError)
-  for (const feature of ["webSearch", "websiteFetch", "browserSpeechRecognition"] as const) {
-    assert.throws(() => runtime.assertFeatureAllowed(feature), AiPolicyError)
-  }
-})
-
-test("task enablement and feature policy are independent", () => {
-  const config = legacy()
-  config.tasks.chat.enabled = false
-  config.policy.features.webSearch = false
-  const runtime = createAiRuntime(config, env)
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt-5-mini" }), AiPolicyError)
-  assert.throws(() => runtime.assertFeatureAllowed("webSearch"), AiPolicyError)
-  assert.doesNotThrow(() => runtime.resolve({ task: "analytics" }))
-})
-
-test("unknown and unconfigured tasks/models never fall back", () => {
-  const config = legacy()
-  delete config.tasks.cards
-  const runtime = createAiRuntime(config, env)
-  assert.throws(() => runtime.resolve({ task: "cards" }), AiPolicyError)
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "google/arbitrary-model" }), AiPolicyError)
-  assert.throws(() => runtime.resolve({ task: "analytics", modelId: "gpt-5-mini" }), AiPolicyError)
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "__proto__" }), AiPolicyError)
-})
-
-test("disabled models are hidden and cannot be selected directly", () => {
-  const config = legacy()
-  config.models["gpt-5-mini"].enabled = false
-  const runtime = createAiRuntime(config, env)
-  assert.equal(runtime.listModels("chat").some((m) => m.id === "gpt-5-mini"), false)
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt-5-mini" }), AiPolicyError)
-})
-
-test("model-level enabled cannot bypass a disabled or forbidden connection", () => {
-  for (const disabled of [true, false]) {
-    const config = legacy()
-    config.connections.other = { ...config.connections.vercel, enabled: !disabled }
-    config.models["gpt-5-mini"].connectionId = "other"
-    if (disabled) config.policy.allowedConnections.push("other")
-    const runtime = createAiRuntime(config, env)
-    assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt-5-mini" }), AiPolicyError)
-    assert.equal(runtime.listModels("chat").some((m) => m.id === "gpt-5-mini"), false)
-  }
-})
-
-test("required task capabilities cannot be relaxed and unavailable models are hidden", () => {
-  const config = legacy()
-  config.models["gpt-5-mini"].capabilities = ["text"]
-  const runtime = createAiRuntime(config, env)
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt-5-mini", requiredCapabilities: [] }), AiPolicyError)
-  assert.equal(runtime.listModels("chat").some((m) => m.id === "gpt-5-mini"), false)
-  assert.throws(() => runtime.resolve({ task: "chat", requiredCapabilities: ["video"] }), AiPolicyError)
-  config.models["gemini-3.1-flash-lite"].capabilities = ["text"]
-  assert.throws(() => createAiRuntime(config, env), AiPolicyError)
-})
-
-test("caller mutation of config and catalogue cannot change runtime policy", () => {
-  const config = legacy()
-  const runtime = createAiRuntime(config, env)
-  config.tasks.chat.allowedModels.push("arbitrary")
-  runtime.listModels("chat")[0].capabilities.push("video")
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "arbitrary" }), AiPolicyError)
-  assert.throws(() => runtime.resolve({ task: "chat", requiredCapabilities: ["video"] }), AiPolicyError)
-})
-
-test("safe catalogue contains neither infrastructure configuration nor secrets", () => {
-  const runtime = createAiRuntime(legacy(), env)
-  const serialized = JSON.stringify(runtime.listModels("chat"))
-  assert.equal(serialized.includes(env.AI_GATEWAY_API_KEY), false)
-  assert.equal(serialized.includes("https://"), false)
-  assert.equal(serialized.includes("credentialsEnv"), false)
-  assert.equal(runtime.resolve({ task: "parseAudio" }).model.modelId, "google/gemini-2.5-flash")
-})
-
-test("explicit adapter sends only to configured Gateway and policy denials do not send requests", async () => {
-  const calls: { url: string; authorization: string | null }[] = []
-  const fakeFetch: typeof fetch = async (input, init) => {
-    calls.push({ url: String(input), authorization: new Headers(init?.headers).get("authorization") })
-    return Response.json({
-      content: [{ type: "text", text: "OK" }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
-    })
-  }
-  const config = legacy()
-  config.models["gpt-5-mini"].enabled = false
-  const runtime = createAiRuntime(config, env, fakeFetch)
-  assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt-5-mini" }), AiPolicyError)
-  assert.equal(calls.length, 0)
-  const route = runtime.resolve({ task: "chat" })
-  const result = await generateText({ model: route.model, prompt: "synthetic", maxRetries: 0 })
-  assert.equal(result.text, "OK")
-  assert.deepEqual(calls, [{
-    url: "https://ai-gateway.vercel.sh/v3/ai/language-model",
-    authorization: `Bearer ${env.AI_GATEWAY_API_KEY}`,
-  }])
-})
-
-test("configuration errors do not disclose unexpected values", () => {
-  const config = legacy()
-  config.connections.vercel.apiKey = "do-not-print-this-secret"
-  assert.throws(() => parseAiConfig(config), (error: unknown) =>
-    error instanceof AiConfigurationError && !error.message.includes("do-not-print-this-secret"))
-})
 
 const yandexEnv = {
   YANDEX_AI_API_KEY: "synthetic-yandex-key",
@@ -189,11 +39,10 @@ const yandexEnv = {
 }
 
 test("text-only chat rejects file parts in new messages and history", () => {
-  assert.doesNotThrow(() => assertChatContentAllowed([{ parts: [{ type: "text" }] }], "yandex-openai-compatible"))
+  assert.doesNotThrow(() => assertChatContentAllowed([{ parts: [{ type: "text" }] }]))
   assert.throws(() => assertChatContentAllowed([
     { parts: [{ type: "file" }] }, { parts: [{ type: "text" }] },
-  ], "yandex-openai-compatible"), AiPolicyError)
-  assert.doesNotThrow(() => assertChatContentAllowed([{ parts: [{ type: "file" }] }], "vercel-gateway"))
+  ]), AiPolicyError)
 })
 function yandex() {
   return JSON.parse(readFileSync("config/ai/yandex.json", "utf8"))
@@ -207,6 +56,154 @@ function completion(content: string, toolCalls?: unknown[]) {
   }
 }
 
+// Two selectable text models for policy tests: the canonical profile plus a
+// second model with its URI in the document (not env).
+function selectable() {
+  const config = yandex()
+  config.models["yandex-lite"] = {
+    enabled: true, label: "Yandex Lite", uri: "gpt://test-folder/yandexgpt-lite",
+    capabilities: ["text", "structuredOutput", "tools", "streaming"],
+  }
+  config.tasks.chat.allowedModels.push("yandex-lite")
+  return config
+}
+
+test("missing configuration fails without any default route", () => {
+  assert.throws(() => loadAiConfig(yandexEnv), AiConfigurationError)
+  assert.throws(() => loadAiConfig({ AI_CONFIG_PATH: "/not-an-ai-config.json" }), AiConfigurationError)
+})
+
+test("strict schema rejects old format, provider sections, foreign URIs and fallbacks", () => {
+  for (const change of [
+    (c: ReturnType<typeof yandex>) => { c.version = 1 },
+    (c: ReturnType<typeof yandex>) => { c.policy = { allowedConnections: ["vercel"] } },
+    (c: ReturnType<typeof yandex>) => { c.connections = { vercel: { adapter: "vercel-gateway" } } },
+    (c: ReturnType<typeof yandex>) => { c.models["yandex-text"].connectionId = "vercel" },
+    (c: ReturnType<typeof yandex>) => { c.models["yandex-text"].uri = "https://example.com/model" },
+    (c: ReturnType<typeof yandex>) => { c.models["yandex-text"].capabilities.push("googleSearch") },
+    (c: ReturnType<typeof yandex>) => { c.tasks.chat.fallbackModels = ["yandex-text"] },
+    (c: ReturnType<typeof yandex>) => { c.files.pdf = "native" },
+  ]) {
+    const config = yandex()
+    change(config)
+    assert.throws(() => parseAiConfig(config), AiConfigurationError)
+  }
+})
+
+test("broken references and unsupported task dependencies fail configuration validation", () => {
+  for (const change of [
+    (c: ReturnType<typeof yandex>) => { c.tasks.chat.allowedModels.push("unknown") },
+    (c: ReturnType<typeof yandex>) => { c.tasks.chat.defaultModel = "yandex-vision" },
+    (c: ReturnType<typeof yandex>) => { c.models["yandex-text"].enabled = false },
+    (c: ReturnType<typeof yandex>) => { c.tasks.parseVideo.enabled = true },
+    (c: ReturnType<typeof yandex>) => { c.tasks.parsePdf.enabled = true },
+    (c: ReturnType<typeof yandex>) => { c.tasks.parseAudio.enabled = true },
+    (c: ReturnType<typeof yandex>) => { c.tasks.webSearch.enabled = true },
+    (c: ReturnType<typeof yandex>) => { c.tasks.companyResearch.enabled = true },
+    (c: ReturnType<typeof yandex>) => { c.features.serverSpeechRecognition = true },
+  ]) {
+    const config = yandex()
+    change(config)
+    assert.throws(() => parseAiConfig(config), AiConfigurationError)
+  }
+})
+
+test("missing active credentials fail without fallback", () => {
+  assert.throws(() => createAiRuntime(yandex(), {}), AiConfigurationError)
+  assert.throws(() => createAiRuntime(yandex(), { ...yandexEnv, YANDEX_AI_API_KEY: "  " }), AiConfigurationError)
+})
+
+test("fully blocked profile needs no credentials and denies every operation", () => {
+  const runtime = createAiRuntime(blocked(), {})
+  assert.deepEqual(runtime.listModels("chat"), [])
+  assert.throws(() => runtime.resolve({ task: "chat" }), AiPolicyError)
+  for (const feature of ["webSearch", "websiteFetch", "browserSpeechRecognition", "serverSpeechRecognition"] as const) {
+    assert.throws(() => runtime.assertFeatureAllowed(feature), AiPolicyError)
+  }
+  assert.equal(runtime.hasService("ocr"), false)
+})
+
+test("YANDEX_AI_API_URL: default origin, custom origin, invalid values rejected", async () => {
+  const calls: string[] = []
+  const fakeFetch: typeof fetch = async (input) => { calls.push(String(input)); return Response.json(completion("OK")) }
+  await generateText({ model: createAiRuntime(yandex(), yandexEnv, fakeFetch).resolve({ task: "chat" }).model, prompt: "synthetic", maxRetries: 0 })
+  await generateText({
+    model: createAiRuntime(yandex(), { ...yandexEnv, YANDEX_AI_API_URL: "https://ai.example.test/" }, fakeFetch).resolve({ task: "chat" }).model,
+    prompt: "synthetic", maxRetries: 0,
+  })
+  assert.deepEqual(calls, ["https://ai.api.cloud.yandex.net/v1/chat/completions", "https://ai.example.test/v1/chat/completions"])
+  for (const value of ["http://ai.api.cloud.yandex.net", "https://ai.api.cloud.yandex.net/v1", "https://u:p@ai.example.test",
+    "https://ai.example.test?x=1", "not a url"]) {
+    assert.throws(() => createAiRuntime(yandex(), { ...yandexEnv, YANDEX_AI_API_URL: value }), AiConfigurationError)
+  }
+  // A fully disabled configuration does not read the address at all.
+  assert.doesNotThrow(() => createAiRuntime(blocked(), { YANDEX_AI_API_URL: "not a url" }))
+})
+
+test("task enablement and feature policy are independent", () => {
+  const config = selectable()
+  config.tasks.chat.enabled = false
+  const runtime = createAiRuntime(config, yandexEnv)
+  assert.throws(() => runtime.resolve({ task: "chat", modelId: "yandex-lite" }), AiPolicyError)
+  assert.throws(() => runtime.assertFeatureAllowed("webSearch"), AiPolicyError)
+  assert.doesNotThrow(() => runtime.resolve({ task: "analytics" }))
+})
+
+test("unknown and unconfigured tasks/models never fall back", () => {
+  const config = selectable()
+  delete config.tasks.cards
+  const runtime = createAiRuntime(config, yandexEnv)
+  assert.throws(() => runtime.resolve({ task: "cards" }), AiPolicyError)
+  assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt://test-folder/arbitrary" }), AiPolicyError)
+  assert.throws(() => runtime.resolve({ task: "analytics", modelId: "yandex-lite" }), AiPolicyError)
+  assert.throws(() => runtime.resolve({ task: "chat", modelId: "__proto__" }), AiPolicyError)
+  assert.equal(runtime.resolve({ task: "chat", modelId: "yandex-lite" }).upstreamModelId, "gpt://test-folder/yandexgpt-lite")
+})
+
+test("disabled models are hidden and cannot be selected directly", () => {
+  const config = selectable()
+  config.models["yandex-lite"].enabled = false
+  const runtime = createAiRuntime(config, yandexEnv)
+  assert.equal(runtime.listModels("chat").some((m) => m.id === "yandex-lite"), false)
+  assert.throws(() => runtime.resolve({ task: "chat", modelId: "yandex-lite" }), AiPolicyError)
+})
+
+test("required task capabilities cannot be relaxed and unavailable models are hidden", () => {
+  const config = selectable()
+  config.models["yandex-lite"].capabilities = ["text"]
+  const runtime = createAiRuntime(config, yandexEnv)
+  assert.throws(() => runtime.resolve({ task: "chat", modelId: "yandex-lite", requiredCapabilities: [] }), AiPolicyError)
+  assert.equal(runtime.listModels("chat").some((m) => m.id === "yandex-lite"), false)
+  assert.throws(() => runtime.resolve({ task: "chat", requiredCapabilities: ["image"] }), AiPolicyError)
+  config.models["yandex-text"].capabilities = ["text"]
+  assert.throws(() => createAiRuntime(config, yandexEnv), AiPolicyError)
+})
+
+test("caller mutation of config and catalogue cannot change runtime policy", () => {
+  const config = selectable()
+  const runtime = createAiRuntime(config, yandexEnv)
+  config.tasks.chat.allowedModels.push("arbitrary")
+  runtime.listModels("chat")[0].capabilities.push("image")
+  assert.throws(() => runtime.resolve({ task: "chat", modelId: "arbitrary" }), AiPolicyError)
+  assert.throws(() => runtime.resolve({ task: "chat", requiredCapabilities: ["image"] }), AiPolicyError)
+})
+
+test("safe catalogue contains neither infrastructure configuration nor secrets", () => {
+  const runtime = createAiRuntime(selectable(), yandexEnv)
+  const serialized = JSON.stringify(runtime.listModels("chat"))
+  assert.equal(serialized.includes(yandexEnv.YANDEX_AI_API_KEY), false)
+  assert.equal(serialized.includes("https://"), false)
+  assert.equal(serialized.includes("gpt://"), false)
+  assert.equal(serialized.includes(yandexEnv.YANDEX_AI_FOLDER_ID), false)
+})
+
+test("configuration errors do not disclose unexpected values", () => {
+  const config = yandex()
+  config.models["yandex-text"].apiKey = "do-not-print-this-secret"
+  assert.throws(() => parseAiConfig(config), (error: unknown) =>
+    error instanceof AiConfigurationError && !error.message.includes("do-not-print-this-secret"))
+})
+
 test("Yandex config requires its own credentials and same-folder model URI", () => {
   for (const environment of [
     {}, { ...yandexEnv, YANDEX_AI_API_KEY: "" },
@@ -217,13 +214,12 @@ test("Yandex config requires its own credentials and same-folder model URI", () 
   ]) assert.throws(() => createAiRuntime(yandex(), environment), AiConfigurationError)
 })
 
-test("regional profile forbids media, Google search and legacy model selections", () => {
+test("base profile keeps media and search off and refuses unknown model selections", () => {
   const runtime = createAiRuntime(yandex(), yandexEnv)
   for (const task of ["parsePdf", "parseImage", "parseAudio", "parseVideo", "companyResearch", "companyExtraction", "webSearch"] as const) {
     assert.throws(() => runtime.resolve({ task }), AiPolicyError)
   }
   assert.throws(() => runtime.resolve({ task: "chat", modelId: "gpt-5-mini" }), AiPolicyError)
-  assert.throws(() => runtime.resolveGoogleSearch("webSearch"), AiPolicyError)
   const config = yandex()
   config.models["yandex-text"].capabilities.push("video")
   assert.throws(() => createAiRuntime(config, yandexEnv), AiConfigurationError)
@@ -427,7 +423,7 @@ test("invalid header characters in key fail before requests without echoing the 
 function mediaProfile() {
   const config = yandex()
   config.models["yandex-vision"].enabled = true
-  config.services.ocr.enabled = true
+  config.services.ocr = true
   for (const task of ["parseImage", "parsePdf", "describeImage"]) config.tasks[task].enabled = true
   return config
 }
@@ -439,16 +435,16 @@ test("media profile requires an explicit vision route and preserves text-only pr
   const config = mediaProfile()
   config.tasks.describeImage.enabled = false
   assert.throws(() => createAiRuntime(config, mediaEnv), AiConfigurationError)
-  assert.equal(createAiRuntime(yandex(), yandexEnv).preprocessing().images, "vision")
+  assert.equal(createAiRuntime(yandex(), yandexEnv).files().images, "vision")
   const runtime = createAiRuntime(mediaProfile(), mediaEnv)
   assert.equal(runtime.resolve({ task: "parsePdf" }).modelId, "yandex-text")
   assert.equal(runtime.resolve({ task: "describeImage" }).modelId, "yandex-vision")
   for (const task of ["parseAudio", "parseVideo", "webSearch"] as const) {
     assert.throws(() => runtime.resolve({ task }), AiPolicyError)
   }
-  const copy = runtime.preprocessing()
+  const copy = runtime.files()
   copy.pdfMaxPages = 20
-  assert.equal(runtime.preprocessing().pdfMaxPages, 10)
+  assert.equal(runtime.files().pdfMaxPages, 10)
 })
 
 test("image pipeline sends inline pixels only to vision, then text only to structured model", async () => {
@@ -528,11 +524,11 @@ test("single Yandex profile explicitly enables selected dependencies and preserv
   assert.doesNotThrow(() => createAiRuntime(off, yandexEnv))
   assert.throws(() => buildStage3Profile(yandex(), ["typo"]), AiConfigurationError)
   const config = fullProfile()
-  config.policy.allowedConnections = []
+  config.services.speech = false
   assert.throws(() => createAiRuntime(config, serviceEnv), AiConfigurationError)
   assert.throws(() => createAiRuntime(fullProfile(), mediaEnv), AiConfigurationError)
-  assert.equal(fullProfile().policy.features.browserSpeechRecognition, false)
-  assert.equal(fullProfile().policy.features.websiteFetch, false)
+  assert.equal(fullProfile().features.browserSpeechRecognition, false)
+  assert.equal(fullProfile().features.websiteFetch, false)
 })
 
 test("SpeechKit uses fixed endpoints, dedicated auth, inline WAV, polls and deletes results", async () => {

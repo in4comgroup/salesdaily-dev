@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     }
 
     const aiRoute = getAiRuntime().resolve({ task: "analytics", organizationId })
-    assertChatContentAllowed(messages, aiRoute.adapter)
+    assertChatContentAllowed(messages)
 
     // Default window = the org's real data span, so «за период» means something
     // even when the dataset doesn't straddle today.

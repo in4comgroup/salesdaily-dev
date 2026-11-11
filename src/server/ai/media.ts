@@ -38,16 +38,16 @@ export async function prepareMediaInput(
   task: "parseImage" | "parsePdf",
   bytes: Uint8Array,
   fileName: string,
-  mediaType: string,
+  _mediaType: string,
   runtime: AiRuntime = getAiRuntime(),
 ): Promise<{ content: UserContent; preprocessingModel?: string }> {
   // A disabled task must never call preprocessing or another model.
   runtime.resolve({ task })
-  const settings = runtime.preprocessing()
-  const mode = task === "parseImage" ? settings.images : settings.pdf
-  if (mode === "native") return { content: [
-    { type: "text", text: `Filename: ${fileName}\n\nExtract structured metadata and convert the attached ${task === "parseImage" ? "image" : "PDF"} into clean Markdown per the schema.` },
-    { type: "file", data: bytes, mediaType, filename: fileName },
+  // Images: `native` gives the inline PNG/JPEG to the parseImage model itself;
+  // `vision` describes it first. PDF always goes through Vision OCR.
+  if (task === "parseImage" && runtime.files().images === "native") return { content: [
+    { type: "text", text: `Filename: ${fileName}\n\nExtract structured metadata and convert the attached image into clean Markdown per the schema.` },
+    { type: "image", image: bytes, mediaType: inlineImageType(bytes) },
   ] }
   const result = task === "parseImage" ? await describeImage(bytes, runtime) : await recognizePdf(bytes, runtime)
   return {

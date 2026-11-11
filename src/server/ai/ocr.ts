@@ -15,7 +15,7 @@ export function parseOcrResult(body: string, maxPages: number) {
   let records: unknown[]
   try { const decoded = JSON.parse(body); records = Array.isArray(decoded) ? decoded : [decoded] }
   catch { records = body.trim().split(/\r?\n/).map((line) => JSON.parse(line)) }
-  if (!records.length || records.length > maxPages) throw new AiPolicyError("OCR page count is empty or exceeds preprocessing.pdfMaxPages")
+  if (!records.length || records.length > maxPages) throw new AiPolicyError("OCR page count is empty or exceeds files.pdfMaxPages")
   const pages = records.map((record) => {
     const wrapped = z.object({ result: z.unknown().optional() }).parse(record)
     return pageSchema.parse(wrapped.result ?? record)
@@ -47,7 +47,7 @@ export async function recognizePdf(bytes: Uint8Array, runtime: AiRuntime = getAi
       if (status.done) break
       await pause(signal)
     }
-    const text = parseOcrResult(await service.request("ocrResult", { id: operation.id, signal }), runtime.preprocessing().pdfMaxPages)
+    const text = parseOcrResult(await service.request("ocrResult", { id: operation.id, signal }), runtime.files().pdfMaxPages)
     return { text, modelId: "vision-ocr/page" }
   } catch (error) {
     if (error instanceof AiPolicyError || error instanceof AiServiceError) throw error

@@ -2,14 +2,17 @@ import "server-only"
 
 import { type LanguageModel } from "ai"
 import {
-  AiConfigurationError, loadAiConfig, parseAiConfig,
+  AiConfigurationError, AI_SERVICES, loadAiConfig, parseAiConfig,
   type AiCapability, type AiEnvironment, type AiFeature, type AiTask,
 } from "./config"
 import { authorizeAiModel, assertAiFeatureAllowed } from "./policy"
 import { listAvailableAiModels, requiredTaskCapabilities } from "./registry"
-import { createVercelGatewayAdapter } from "./adapters/vercel-gateway"
 import { createYandexAdapter } from "./adapters/yandex"
 import { createYandexService, type ServiceName, type YandexService } from "./services"
+import {
+  LEGACY_MODEL_URI_ENV, YANDEX_ENV, YANDEX_SERVICE_KEY_ENV,
+  readYandexApiKey, readYandexFolderId, resolveYandexApiUrl,
+} from "./yandex-connection"
 import { AiPolicyError } from "./policy"
 import type { AiDiagnostics } from "./diagnostics"
 import { meterModel } from "./usage"
@@ -24,40 +27,34 @@ export function createAiRuntime(
   const config = parseAiConfig(input)
   const environment = { ...env }
 
-  // Credentials are required only for active, policy-approved connections.
-  // Constructing adapters does not issue network requests.
-  const adapters = new Map<string, (modelId: string, allowImages?: boolean) => Exclude<LanguageModel, string>>()
-  for (const [id, connection] of Object.entries(config.connections)) {
-    if (connection.enabled && config.policy.allowedConnections.includes(id)) {
-      adapters.set(id, connection.adapter === "vercel-gateway"
-        ? createVercelGatewayAdapter(connection, environment, fetchImplementation)
-        : createYandexAdapter(connection, environment, fetchImplementation, diagnostics))
-    }
-  }
+  const enabledModels = Object.entries(config.models).filter(([, model]) => model.enabled)
+  const enabledServices = AI_SERVICES.filter((name) => config.services[name])
+
+  // Yandex access is needed only when something is enabled: a fully disabled
+  // configuration needs no keys. Building adapters sends no network requests.
+  const needsYandex = enabledModels.length > 0 || enabledServices.length > 0
+  const apiUrl = needsYandex ? resolveYandexApiUrl(environment) : undefined
+  const folderId = needsYandex ? readYandexFolderId(environment) : undefined
+  const adapter = enabledModels.length > 0
+    ? createYandexAdapter({ apiUrl: apiUrl!, apiKey: readYandexApiKey(environment, YANDEX_ENV.apiKey), folderId: folderId! },
+      fetchImplementation, diagnostics)
+    : undefined
 
   const services = new Map<ServiceName, YandexService>()
-  for (const name of ["speech", "search", "ocr"] as const) {
-    const service = config.services[name]
-    if (!service.enabled) continue
-    const connection = config.connections[service.connectionId!]
-    if (connection.adapter !== "yandex-openai-compatible") throw new AiConfigurationError("Yandex service requires a Yandex connection")
-    services.set(name, createYandexService(name, service.credentialsEnv!, connection.folderIdEnv, environment, fetchImplementation))
+  for (const name of enabledServices) {
+    services.set(name, createYandexService(name, {
+      apiUrl: apiUrl!, folderId: folderId!, apiKey: readYandexApiKey(environment, YANDEX_SERVICE_KEY_ENV[name]),
+    }, fetchImplementation))
   }
 
-  const modelIds = new Map<string, string>()
-  for (const [id, model] of Object.entries(config.models)) {
-    if (!model.enabled || !config.policy.allowedConnections.includes(model.connectionId) ||
-        !config.connections[model.connectionId].enabled) continue
-    const upstreamId = model.upstreamModelId ?? environment[model.upstreamModelIdEnv!]?.trim()
-    if (!upstreamId) throw new AiConfigurationError("Missing upstream model environment variable")
-    const connection = config.connections[model.connectionId]
-    if (connection.adapter === "yandex-openai-compatible" &&
-        model.capabilities.some((c) => ["pdf", "audio", "video", "googleSearch"].includes(c))) {
-      throw new AiConfigurationError("Yandex adapter supports text and inline images only")
-    }
-    // Validate model URI before any call; adapters only construct objects here.
-    adapters.get(model.connectionId)!(upstreamId, model.capabilities.includes("image"))
-    modelIds.set(id, upstreamId)
+  const modelUris = new Map<string, string>()
+  for (const [id, model] of enabledModels) {
+    const legacyEnv = LEGACY_MODEL_URI_ENV[id]
+    const uri = model.uri ?? (legacyEnv ? environment[legacyEnv]?.trim() : undefined)
+    if (!uri) throw new AiConfigurationError(`Missing model URI for AI model: ${id}`)
+    // Validates the URI (Yandex format, configured folder) before any call.
+    adapter!(uri, model.capabilities.includes("image"))
+    modelUris.set(id, uri)
   }
 
   // Validate baseline capability requirements before accepting this runtime.
@@ -74,21 +71,11 @@ export function createAiRuntime(
       if (!service) throw new AiPolicyError(`AI service is disabled: ${name}`)
       return service
     },
-    preprocessing() { return { ...config.preprocessing } },
+    files() { return { ...config.files } },
     listModels(task: AiTask) { return listAvailableAiModels(config, task) },
     assertFeatureAllowed(feature: AiFeature) { assertAiFeatureAllowed(config, feature) },
-    isFeatureAllowed(feature: AiFeature) { return config.policy.features[feature] === true },
-    features() { return { ...config.policy.features } },
-    resolveGoogleSearch(task: "webSearch" | "companyResearch") {
-      assertAiFeatureAllowed(config, "webSearch")
-      const route = authorizeAiModel(config, task, undefined, ["text", "googleSearch"])
-      const upstreamId = modelIds.get(route.modelId)!
-      if (route.connection.adapter !== "vercel-gateway" || !upstreamId.startsWith("google/")) {
-        throw new AiConfigurationError("Google Search requires an explicitly approved Google Gateway route")
-      }
-      return meterModel(adapters.get(route.definition.connectionId)!(upstreamId),
-        { task, modelId: route.modelId, upstreamModelId: upstreamId })
-    },
+    isFeatureAllowed(feature: AiFeature) { return config.features[feature] === true },
+    features() { return { ...config.features } },
     // `organizationId` / `sourceItemId` attribute the call in `llm_usage` and
     // apply the org's daily cost cap. When omitted they come from
     // `withAiUsageContext()` (see ./usage.ts).
@@ -102,9 +89,8 @@ export function createAiRuntime(
       const route = authorizeAiModel(config, request.task, request.modelId, [
         ...requiredTaskCapabilities(request.task, config), ...(request.requiredCapabilities ?? []),
       ])
-      const adapter = adapters.get(route.definition.connectionId)
-      if (!adapter) throw new AiConfigurationError("AI adapter is unavailable")
-      const upstreamModelId = modelIds.get(route.modelId)!
+      const upstreamModelId = modelUris.get(route.modelId)
+      if (!adapter || !upstreamModelId) throw new AiConfigurationError("AI adapter is unavailable")
       const model: Exclude<LanguageModel, string> = meterModel(
         adapter(upstreamModelId, route.definition.capabilities.includes("image")),
         { task: request.task, modelId: route.modelId, upstreamModelId },
@@ -114,11 +100,9 @@ export function createAiRuntime(
         model,
         task: request.task,
         modelId: route.modelId,
-        connectionId: route.definition.connectionId,
         configVersion: config.version,
         upstreamModelId,
         capabilities: [...route.definition.capabilities],
-        adapter: route.connection.adapter,
       }
     },
   }

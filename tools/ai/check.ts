@@ -40,7 +40,7 @@ async function main() {
     task: values.probe as AiTask, modelId: values.model,
     requiredCapabilities: mode === "structured" ? ["structuredOutput"] : mode === "tools" ? ["tools"] : mode === "stream" ? ["streaming"] : ["text"],
   })
-  console.log(`Synthetic ${mode} probe: ${route.task} → ${route.connectionId} / ${route.modelId}`)
+  console.log(`Synthetic ${mode} probe: ${route.task} → yandex / ${route.modelId}`)
   if (mode === "image" || mode === "pdf") {
     const task = mode === "image" ? "parseImage" : "parsePdf"
     if (values.probe !== task || values.model) throw new AiConfigurationError("Media probe requires its matching parse task and configured default models")

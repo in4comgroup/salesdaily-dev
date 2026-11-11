@@ -1,5 +1,5 @@
 import "server-only"
-import { AiConfigurationError, type AiEnvironment } from "./config"
+import { AiConfigurationError } from "./config"
 
 export type ServiceName = "speech" | "search" | "ocr"
 export type ServiceOperation = "start" | "poll" | "result" | "delete" | "search" | "ocrStart" | "ocrResult"
@@ -31,15 +31,16 @@ export async function readBounded(response: Response, maxBytes = 8 * 1024 * 1024
   return (await readBytesBounded(response.body, maxBytes)).toString("utf8")
 }
 
+// Fixed Yandex REST operations. Vision OCR shares the AI Studio origin
+// (YANDEX_AI_API_URL); SpeechKit, operations and Search API hosts are fixed.
 export function createYandexService(
-  name: ServiceName, credentialsEnv: string, folderIdEnv: string,
-  env: AiEnvironment, transport: typeof fetch = fetch,
+  name: ServiceName,
+  access: { apiUrl: string; apiKey: string; folderId: string },
+  transport: typeof fetch = fetch,
 ) {
-  const key = env[credentialsEnv]?.trim()
-  const folder = env[folderIdEnv]?.trim()
-  if (!key || !/^[\x21-\x7e]+$/.test(key) || !folder || !/^[a-zA-Z0-9_-]+$/.test(folder)) {
-    throw new AiConfigurationError(`Missing or invalid Yandex ${name} credentials/folder`)
-  }
+  const key = access.apiKey
+  const folder = access.folderId
+  const apiUrl = access.apiUrl
   return {
     folderId: folder,
     async request(operation: ServiceOperation, options: { id?: string; body?: unknown; signal?: AbortSignal } = {}) {
@@ -55,8 +56,8 @@ export function createYandexService(
         poll: `https://operation.api.cloud.yandex.net/operations/${options.id}`,
         result: `https://stt.api.cloud.yandex.net/stt/v3/getRecognition?operationId=${options.id}`,
         delete: `https://stt.api.cloud.yandex.net/stt/v3/deleteRecognition?operationId=${options.id}`,
-        ocrStart: "https://ai.api.cloud.yandex.net/ocr/v1/recognizeTextAsync",
-        ocrResult: `https://ai.api.cloud.yandex.net/ocr/v1/getRecognition?operationId=${options.id}`,
+        ocrStart: `${apiUrl}/ocr/v1/recognizeTextAsync`,
+        ocrResult: `${apiUrl}/ocr/v1/getRecognition?operationId=${options.id}`,
         search: "https://searchapi.api.cloud.yandex.net/v2/web/search",
       }
       try {

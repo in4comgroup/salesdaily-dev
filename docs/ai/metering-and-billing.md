@@ -35,7 +35,7 @@ flowchart LR
    - заголовки `Authorization: Api-Key <YANDEX_AI_API_KEY>`, `OpenAI-Project: <YANDEX_AI_FOLDER_ID>`, `x-data-logging-enabled: false`;
    - URI модели обязан принадлежать каталогу (`gpt://<folder>/...`);
    - файлы — только inline PNG/JPEG до 10 МиБ и только для моделей с `image`.
-4. `resolve()` оборачивает модель в [meterModel()](../../src/server/ai/usage.ts) (см. ниже). Это касается **каждого** `generateText` / `generateObject` / `streamText`, в том числе `resolveGoogleSearch` legacy-профиля.
+4. `resolve()` оборачивает модель в [meterModel()](../../src/server/ai/usage.ts) (см. ниже). Это касается **каждого** `generateText` / `generateObject` / `streamText`.
 
 OCR, SpeechKit и Search API вызываются через `runtime.service(...)` ([services.ts](../../src/server/ai/services.ts)). Они **не проходят** через `meterModel` и не пишутся в `llm_usage`.
 

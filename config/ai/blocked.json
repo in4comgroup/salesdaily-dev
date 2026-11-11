@@ -1,95 +1,86 @@
 {
-  "version": 1,
-  "policy": {
-    "allowedConnections": [],
-    "features": {
-      "webSearch": false,
-      "websiteFetch": false,
-      "browserSpeechRecognition": false
-    }
+  "version": 2,
+  "features": {
+    "webSearch": false,
+    "websiteFetch": false,
+    "browserSpeechRecognition": false,
+    "serverSpeechRecognition": false
   },
-  "connections": {},
+  "files": {
+    "images": "vision",
+    "maxMediaSeconds": 180,
+    "pdfMaxPages": 10
+  },
+  "services": {
+    "ocr": false,
+    "speech": false,
+    "search": false
+  },
   "models": {},
   "tasks": {
     "chat": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "analytics": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "cards": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "deals": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "orderRequest": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "chatSummary": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "companyResearch": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "companyExtraction": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "parseText": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "parsePdf": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "parseImage": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "parseAudio": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "parseVideo": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "parseOffice": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "orgAttribution": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     },
     "webSearch": {
       "enabled": false,
-      "allowedModels": [],
-      "fallbackModels": []
+      "allowedModels": []
     }
   }
 }

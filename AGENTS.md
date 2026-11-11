@@ -98,7 +98,7 @@ Before changing database-backed code or `src/db/schema.ts`, read
 - **Tailwind CSS v4** with shadcn/ui (New York style)
 - **Resend** / **Nylas** — transactional email (dispatcher in `src/lib/email.ts`, provider picked by `EMAIL_PROVIDER`)
 - **React Hook Form + Zod** — form validation
-- **Vercel AI SDK v6** (`ai`) routed through **Vercel AI Gateway** (auth via `AI_GATEWAY_API_KEY`). `@ai-sdk/google` is kept only for the `google.tools.googleSearch()` tool factory used by Gemini grounding.
+- **Vercel AI SDK v6** (`ai`) with **`@ai-sdk/openai-compatible`** → **Yandex AI Studio API only** (`src/server/ai/`). Vercel AI Gateway, Google Search and `@ai-sdk/google` were removed (2026-11-11). Address = `YANDEX_AI_API_URL` (default `https://ai.api.cloud.yandex.net`), keys `YANDEX_AI_API_KEY` + `YANDEX_AI_FOLDER_ID`. Routing = JSON by `AI_CONFIG_PATH` (schema version 2) — moving to the DB per `docs/ai/config-in-db-spec.md`.
 - **ai-elements**, **streamdown** (code via Shiki, math, CJK, mermaid plugins), **json-render** (`@json-render/{core,react,shadcn}`) — AI UI
 - **Recharts** (via shadcn/ui Charts), **@tanstack/react-table** — data viz
 - **Nylas SDK v8** — email reading/sending. Reading is **per-source**: `src/lib/nylas.ts` exports `getNylasClient(creds)` alongside the platform client, so a source whose `credentials_ref` carries `apiKey`/`apiUri` is read through the ORG's own Nylas application (the default export stays for platform transactional mail)

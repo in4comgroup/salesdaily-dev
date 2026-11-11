@@ -1,6 +1,6 @@
 # Архитектура AI-подсистемы и карта кода
 
-Состояние кода на 9 ноября 2026 года; учёт использования и цены моделей добавлены 11 ноября 2026 года — см. [metering-and-billing.md](metering-and-billing.md). Документ описывает реализацию после этапов 1–3 миграции; для понимания не требуется история Git. Наличие реализации не означает прохождение реальной приёмки или включение в production. Фактические проверки и отключения ведутся в [roadmap.md](roadmap.md).
+Состояние кода на 9 ноября 2026 года; 11 ноября — только Yandex, схема конфигурации версии 2 ([config-in-db-spec.md](config-in-db-spec.md), этап 1); учёт использования и цены моделей добавлены 11 ноября 2026 года — см. [metering-and-billing.md](metering-and-billing.md). Документ описывает реализацию после этапов 1–3 миграции; для понимания не требуется история Git. Наличие реализации не означает прохождение реальной приёмки или включение в production. Фактические проверки и отключения ведутся в [roadmap.md](roadmap.md).
 
 ## С чего начать чтение
 
@@ -25,7 +25,6 @@ flowchart TD
     Runtime --> Resolve["resolve: task + необязательный modelId"]
     Resolve --> Adapter["Явный объект модели AI SDK"]
     Adapter --> Yandex["Yandex Chat Completions"]
-    Adapter --> Legacy["Vercel Gateway: только разрешённый legacy-профиль"]
     Runtime --> Service["service: ocr / speech / search"]
     Service --> HTTP["Фиксированные REST-операции Yandex"]
     Adapter --> Meter["meterModel: дневной лимит + запись в llm_usage (БД)"]
@@ -44,28 +43,31 @@ flowchart TD
 
 | Элемент JSON | Назначение |
 | --- | --- |
-| `policy.allowedConnections` | Разрешённые подключения; наличие подключения в JSON ещё не разрешает его использование |
-| `policy.features` | Отдельные переключатели поиска, чтения сайтов и двух способов голосового ввода |
-| `connections` | Адаптер, фиксированный адрес API, имена переменных ключа/каталога |
-| `models` | Внутренний ID, подпись, подключение, upstream ID или имя env с URI, `capabilities`, `enabled` |
-| `tasks` | Доступность прикладной задачи, `defaultModel`, `allowedModels`; автоматические fallback запрещены |
-| `services` | OCR/STT/поиск: доступность, привязка к разрешённому Yandex-подключению, имя env ключа |
-| `preprocessing` | Способ подготовки изображения/PDF/аудио/видео и лимиты; название сохранилось, хотя локальные декодеры удалены |
+Схема конфигурации — версия 2 (с 11 ноября 2026 года): только Yandex AI Studio. Раздела подключений нет: единственное подключение задано в коде ([yandex-connection.ts](../../src/server/ai/yandex-connection.ts)), адрес API — env `YANDEX_AI_API_URL` (по умолчанию `https://ai.api.cloud.yandex.net`, только https-origin без пути). Vercel AI Gateway и Google Search удалены. Спецификация: [config-in-db-spec.md](config-in-db-spec.md).
 
-`yandex-text` и `yandex-vision` — внутренние ID конфигурации. Настоящие URI находятся в `YANDEX_AI_TEXT_MODEL_URI` и `YANDEX_AI_VISION_MODEL_URI`. Клиент выбирает внутренний ID; переданный клиентом ID снова проверяется сервером.
+| Элемент JSON | Назначение |
+| --- | --- |
+| `version` | Всегда `2` |
+| `features` | Переключатели веб-поиска, чтения сайтов и двух способов голосового ввода |
+| `files` | `images`: `vision` (сначала `describeImage`) или `native` (inline-изображение сразу модели `parseImage`); `maxMediaSeconds`, `pdfMaxPages` |
+| `services` | `ocr`, `speech`, `search`: вкл/выкл. Ключи — фиксированные env (`YANDEX_OCR_API_KEY`, `YANDEX_SPEECH_API_KEY`, `YANDEX_SEARCH_API_KEY`) |
+| `models` | Внутренний ID, подпись, `uri` (необязательно), `capabilities` (`text`, `structuredOutput`, `tools`, `streaming`, `image`), `enabled` |
+| `tasks` | Доступность прикладной задачи, `defaultModel`, `allowedModels`; автоматических fallback нет |
 
-[config.ts](../../src/server/ai/config.ts) использует строгую Zod-схему: неизвестные поля, битые ссылки, запрещённые default-маршруты и несогласованные зависимости отвергаются. Ошибки показывают пути полей без исходных значений. Например, включённый `parsePdf` с `pdf=ocr` требует включённого OCR-сервиса, а `parseVideo` нельзя включить при `video=disabled`.
+`yandex-text` и `yandex-vision` — внутренние ID конфигурации. URI модели (`gpt://<folder>/...`) — поле `uri`; если его нет, берётся из `YANDEX_AI_TEXT_MODEL_URI` / `YANDEX_AI_VISION_MODEL_URI` (переходный период до переноса в БД). Клиент выбирает внутренний ID; переданный клиентом ID снова проверяется сервером.
 
-[registry.ts](../../src/server/ai/registry.ts) задаёт обязательные возможности задачи. Чат/аналитика требуют text/tools/streaming; структурирующие задачи — structuredOutput; `describeImage` — image. Для PDF через OCR и аудио через STT финальной модели нужна текстовая структурированная генерация, а не нативный вход PDF/аудио. Нельзя ослабить эти требования параметрами вызова.
+[config.ts](../../src/server/ai/config.ts) использует строгую Zod-схему: неизвестные поля (в том числе старые `policy`, `connections`, `preprocessing`), битые ссылки, задачи без включённой модели и несогласованные зависимости отвергаются. Ошибки показывают пути полей без исходных значений. Зависимости: `parsePdf` требует `services.ocr`; `parseAudio` и серверный микрофон — `services.speech`; `webSearch` и `companyResearch` — `services.search`; `parseImage` при `images=vision` — включённый `describeImage`; `parseVideo` включить нельзя.
 
-[resolve.ts](../../src/server/ai/resolve.ts) создаёт приватную копию конфигурации/env, адаптеры и включённые сервисы. Проверяет наличие активных параметров, URI моделей и baseline-возможности задач **без сетевых запросов**. У Yandex URI должен принадлежать настроенному каталогу. Ключи/URI нужны для всех включённых разрешённых моделей/сервисов, даже если конкретная задача ещё не запускалась.
+[registry.ts](../../src/server/ai/registry.ts) задаёт обязательные возможности задачи. Чат/аналитика требуют text/tools/streaming; поиск и исследование компании — text; `describeImage` — image; `parseImage` при `images=native` — structuredOutput + image; остальные — text + structuredOutput (PDF и аудио приходят модели текстом после OCR / SpeechKit). Нельзя ослабить эти требования параметрами вызова.
+
+[resolve.ts](../../src/server/ai/resolve.ts) создаёт приватную копию конфигурации/env, адаптер Yandex и включённые сервисы. Проверяет адрес API, ключи, каталог, URI моделей и baseline-возможности задач **без сетевых запросов**. URI должен принадлежать каталогу `YANDEX_AI_FOLDER_ID`. Ключи/URI нужны для всех включённых моделей/сервисов, даже если конкретная задача ещё не запускалась. Если ничего не включено (`blocked.json`), env не нужны.
 
 [инструментация Next.js](../../src/instrumentation.ts) вызывает runtime при запуске Node.js, кроме фазы production build. Ошибка конфигурации останавливает старт; обращения к провайдеру до первого запроса нет. `getAiRuntime()` кеширует runtime на процесс: изменение JSON/env требует перезапуска всех pod’ов, горячей загрузки нет.
 
 Профили:
 
 - [yandex.json](../../config/ai/yandex.json): один исходный региональный профиль, новые функции по умолчанию выключены, текстовые включены.
-- `legacy.json` удалён 11 ноября 2026 года. Gemini/GPT/Claude через явный Gateway остались только как фикстура тестов [gateway-fixture.ts](../../tools/ai/gateway-fixture.ts); адаптер `vercel-gateway` в коде сохранён.
+- `legacy.json` (Gemini/GPT/Claude через Vercel Gateway) и адаптер Gateway удалены 11 ноября 2026 года.
 - [blocked.json](../../config/ai/blocked.json): AI выключен, AI-ключи не требуются.
 
 Наследования и объединения JSON нет. Прежний экспериментальный `yandex-media.json` больше не используется.
@@ -76,24 +78,24 @@ flowchart TD
 | --- | --- |
 | [index.ts](../../src/server/ai/index.ts) | Публичные серверные экспорты runtime, типов и ошибок политики |
 | [adapters/yandex.ts](../../src/server/ai/adapters/yandex.ts) | OpenAI-compatible Chat Completions; авторизация `Api-Key`, `OpenAI-Project`, `x-data-logging-enabled: false`; проверка адреса и запрет редиректов |
-| [adapters/vercel-gateway.ts](../../src/server/ai/adapters/vercel-gateway.ts) | Явный `createGateway` с ключом и адресом; существующие провайдеры сохранены без неявного SDK Gateway |
+| [yandex-connection.ts](../../src/server/ai/yandex-connection.ts) | Единственное подключение: адрес API из `YANDEX_AI_API_URL`, имена env ключей и каталога, переходные env URI моделей |
 | [services.ts](../../src/server/ai/services.ts) | REST-клиент OCR/STT/Search, allowlist операций/адресов, авторизация, лимит чтения тела, безопасная сервисная ошибка |
 | [errors.ts](../../src/server/ai/errors.ts) | Безопасные ошибки генерации/проб, классификация HTTP/сети/таймаутов, форматирование CLI |
 | [diagnostics.ts](../../src/server/ai/diagnostics.ts) | Опциональная диагностика синтетических CLI-проб с маскированием ключей/полей авторизации и ограничением объёма |
 
 Yandex-адаптер разрешает текст и явно включённые inline PNG/JPEG. Он запрещает прямые file-входы PDF/аудио/видео и URL файлов. Middleware предотвращает предварительное скачивание удалённых файлов самим AI SDK. Текстовая модель без image-capability не принимает изображения.
 
-Для REST-сервисов задаются отдельные env ключей; автоматической подстановки AI-ключа нет. `connectionId` связывает сервис с разрешённым подключением и его каталогом, но запрос отправляется в фиксированный сервисный API, а не в `connections.baseUrl`.
+Для REST-сервисов задаются отдельные env ключей; автоматической подстановки AI-ключа нет. Каталог общий (`YANDEX_AI_FOLDER_ID`).
 
 | Назначение | Реализованные адреса |
 | --- | --- |
-| Генерация | `https://ai.api.cloud.yandex.net/v1/chat/completions` |
-| PDF OCR | `https://ai.api.cloud.yandex.net/ocr/v1/recognizeTextAsync`, `/ocr/v1/getRecognition?operationId=...` |
+| Генерация | `<YANDEX_AI_API_URL>/v1/chat/completions` (по умолчанию `https://ai.api.cloud.yandex.net`) |
+| PDF OCR | `<YANDEX_AI_API_URL>/ocr/v1/recognizeTextAsync`, `/ocr/v1/getRecognition?operationId=...` |
 | SpeechKit | `https://stt.api.cloud.yandex.net/stt/v3/recognizeFileAsync`, `/stt/v3/getRecognition`, `/stt/v3/deleteRecognition` |
 | Проверка операций OCR/STT | `https://operation.api.cloud.yandex.net/operations/<id>` |
 | Веб-поиск | `https://searchapi.api.cloud.yandex.net/v2/web/search` |
 
-Адреса специализированных сервисов и HTTP-методы определены в `services.ts`; редиректы запрещены. Для нового назначения нужно расширять транспорт и проверки, а не принимать URL от клиента. Старый Gateway находится вне целевого Yandex-профиля. Непустой `fallbackModels` не поддерживается; ошибка Yandex не разрешает автоматически вызвать старого провайдера.
+Адреса специализированных сервисов и HTTP-методы определены в `services.ts`; редиректы запрещены. Для нового назначения нужно расширять транспорт и проверки, а не принимать URL от клиента. Другого провайдера в коде нет: ошибка Yandex не приводит к вызову другого API.
 
 ## Конвейеры файлов
 
@@ -111,14 +113,14 @@ flowchart LR
 
 | Файл | Что искать |
 | --- | --- |
-| [media.ts](../../src/server/ai/media.ts) | `prepareMediaInput`, `describeImage`, проверка PNG/JPEG; выбор native-входа legacy или разрешённой подготовки Yandex |
+| [media.ts](../../src/server/ai/media.ts) | `prepareMediaInput`, `describeImage`, проверка PNG/JPEG; изображение — `vision` или `native` (inline PNG/JPEG), PDF — всегда OCR |
 | [ocr.ts](../../src/server/ai/ocr.ts) | `recognizePdf`: исходный PDF Base64 → запуск async → polling → результат; `parseOcrResult`: страницы JSON/JSONL, нумерация, дубли, лимиты и пустой текст |
 | [av.ts](../../src/server/ai/av.ts) | `prepareAvInput`, `transcribeMedia`, `speechContainer`, `pcmWavDuration`; прямые аудиобайты, проверка контейнеров и длительности; явный отказ видео |
 | [speech.ts](../../src/server/ai/speech.ts) | `recognizeSpeech`: запуск/poll/result/delete; `parseSpeechResult` и `parseSpeechFileResult`: финальные/нормализованные реплики, таймкоды и полная длительность |
 | [парсер изображения](../../src/server/parsers/image.ts) | Прикладная схема изображения, decorative-признак, frontmatter/Markdown и метаданные |
 | [парсер PDF](../../src/server/parsers/pdf.ts) | Прикладная схема документа; текст OCR структурируется текстовой моделью |
 | [парсер аудио](../../src/server/parsers/audio.ts) | Схема анализа, итоговый Markdown; транскрипт/таймкоды/длительность Yandex подставляются из STT, а не из догадок LLM |
-| [парсер видео](../../src/server/parsers/video.ts) | Существующий native-маршрут legacy; в Yandex задача выключена до обращения к модели |
+| [парсер видео](../../src/server/parsers/video.ts) | Задача `parseVideo` не может быть включена; вызов отклоняется до обращения к модели |
 | [_shared.ts](../../src/server/parsers/_shared.ts) | Общие схемы/типы метаданных, Markdown/frontmatter и `MetadataAnalysis.parserModel` |
 | [parser-config.ts](../../src/lib/parser-config.ts) | Общие ограничения/форматы парсеров; маршруты моделей здесь не задаются |
 
@@ -146,9 +148,9 @@ Worklet должен поставляться вместе с `public/` и бы�
 
 [search.ts](../../src/server/ai/search.ts) содержит `researchYandex`: проверяет feature, задачу и сервис; запрашивает до шести результатов Search API; разбирает Base64/XML; передаёт сниппеты текстовой модели без инструментов скачивания страниц. XML с DTD/entities отвергается. Возвращаемые `sources` берутся из результатов поиска, а не генерируются моделью. Это не гарантирует фактическую точность каждого предложения сводки.
 
-[web-search.ts](../../src/server/web-search.ts) — функция инструмента `searchWeb` для чата. При включённом Yandex search-сервисе вызывает `researchYandex`; иначе разрешённый legacy-маршрут проверяется через `resolveGoogleSearch`. Ошибка поиска возвращается как `grounded=false`, а не включает другого провайдера.
+[web-search.ts](../../src/server/web-search.ts) — функция инструмента `searchWeb` для чата. Вызывает только `researchYandex`. Без сервиса `search` задача `webSearch` выключена, и инструмент не регистрируется. Ошибка поиска возвращается как `grounded=false`, а не включает другого провайдера.
 
-[clients.ts](../../src/server/clients.ts), `lookupClientOnWeb` — исследование компании и структурирование кандидатов. Сначала проверяет организацию/доступ к записи, затем маршруты `companyResearch` и `companyExtraction`. Поиск Yandex использует имя/известный сайт и поисковые слова; исследовательский контекст передаётся разрешённой модели. `fetchSiteTextForLookup` защищён отдельным `websiteFetch`; в целевом профиле прямое чтение сайтов выключено. Поэтому полнота обогащения по сниппетам может быть ниже.
+[clients.ts](../../src/server/clients.ts), `lookupClientOnWeb` — исследование компании и структурирование кандидатов. Сначала проверяет организацию/доступ к записи, затем маршруты `companyResearch` и `companyExtraction`. Без сервиса `search` исследование недоступно (ошибка политики). Поиск Yandex использует имя/известный сайт и поисковые слова; исследовательский контекст передаётся разрешённой модели. `fetchSiteTextForLookup` защищён отдельным `websiteFetch`; в целевом профиле прямое чтение сайтов выключено. Поэтому полнота обогащения по сниппетам может быть ниже.
 
 ## Каталог и интерфейс
 
@@ -156,7 +158,7 @@ Worklet должен поставляться вместе с `public/` и бы�
 
 [use-ai-models.ts](../../src/hooks/use-ai-models.ts) получает каталог с `no-store` и выбирает доступную модель/default. Главные потребители:
 
-- [ai-chat.tsx](../../src/components/blocks/ai-chat.tsx) — модели чата, доступность вложений/поиска/микрофона;
+- [ai-chat.tsx](../../src/components/blocks/ai-chat.tsx) — модели чата, доступность поиска/микрофона; вложения в чате выключены;
 - [explore-sources-dialog.tsx](../../src/components/blocks/explore-sources-dialog.tsx), [magic-cards-button.tsx](../../src/components/blocks/magic-cards-button.tsx) — генерация карточек;
 - [discover-deals-dialog.tsx](../../src/components/blocks/discover-deals-dialog.tsx), [magic-deals-button.tsx](../../src/components/blocks/magic-deals-button.tsx) — поиск сделок.
 
@@ -190,7 +192,7 @@ Worklet должен поставляться вместе с `public/` и бы�
 | Файл | Назначение |
 | --- | --- |
 | [run.mjs](../../tools/ai/run.mjs) | Обёртка команд `profile`, `check`, `test`: компилирует ограниченный граф TypeScript во временный каталог и запускает Node с server-условиями; нативный tsx/esbuild не нужен |
-| [profile.ts](../../tools/ai/profile.ts) | `buildStage3Profile`: включает полный выбранный список функций и зависимости, проверяет схему, пишет явную копию JSON для деплоя; `video` отвергается |
+| [profile.ts](../../tools/ai/profile.ts) | `buildStage3Profile`: включает полный выбранный список функций и зависимости, проверяет схему, пишет явную копию JSON для деплоя; `video` отвергается. Удаляется на этапе 4 [config-in-db-spec.md](config-in-db-spec.md) |
 | [check.ts](../../tools/ai/check.ts) | Проверка runtime без сети либо явные платные синтетические пробы text/structured/tools/stream/image/pdf; env-файлы автоматически не загружает |
 | [synthetic-media.ts](../../tools/ai/synthetic-media.ts) | PNG/PDF для проб без чтения пользовательских файлов |
 | [runtime.test.ts](../../tools/ai/runtime.test.ts) | Политика, адаптеры, сервисы, mock HTTP, форматы файлов, ошибки/очистка, PCM/WAV и AudioWorklet |
@@ -216,6 +218,6 @@ Worklet должен поставляться вместе с `public/` и бы�
 
 SpeechKit удаляет результат в `finally` после получения ID; аварийное завершение/потеря ответа старта не гарантируют удаление. Ошибка cleanup видна как безопасная ошибка с ID. Для OCR отдельное удаление результата не реализовано. Заголовок отключения логирования не равен гарантии отсутствия хранения. Регион, условия обработки/хранения и сетевые ограничения требуют проверки этапа 4; здесь описана программная маршрутизация. Почта, Google Drive/Chat, S3 и другие внешние интеграции CRM не заменяются этим AI-слоем.
 
-При добавлении задачи: расширить `AI_TASKS`, baseline capabilities, конфигурацию и прикладной вызов через runtime. При добавлении нового провайдера/REST-сервиса: добавить строгую схему, разрешённые адреса/операции, адаптер, проверки политики и тесты отказов. После изменения доступности обновить roadmap и эксплуатационную инструкцию. Для переноса между Yandex и legacy сохранять отдельные явно разрешённые профили; простое изменение label/capabilities не доказывает поддержку функции провайдером.
+При добавлении задачи: расширить `AI_TASKS`, baseline capabilities, конфигурацию и прикладной вызов через runtime. При добавлении REST-сервиса Yandex: разрешённые адреса/операции в `services.ts`, проверки политики и тесты отказов. Другой провайдер — только отдельным решением и ревью кода, не через конфигурацию. После изменения доступности обновить roadmap и эксплуатационную инструкцию. Простое изменение label/capabilities не доказывает поддержку функции моделью.
 
 Связанные документы: [migration-plan.md](migration-plan.md) — решения и план; [current.md](current.md) — **историческая исходная инвентаризация**, а не текущая схема маршрутов; [stage-2-check.md](stage-2-check.md) — текстовые пробы; [roadmap.md](roadmap.md) — фактический прогресс и отключения.

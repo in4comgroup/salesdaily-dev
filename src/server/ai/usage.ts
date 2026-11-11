@@ -86,7 +86,7 @@ export function currentAiUsageContext(): AiUsageContext {
 }
 
 // Upstream id without the Yandex folder: `gpt://<folder>/yandexgpt/latest` →
-// `yandexgpt/latest`. Gateway ids (`google/gemini-…`) stay as they are. This is
+// `yandexgpt/latest`. Other ids (old `google/gemini-…` rows) stay as they are. This is
 // the key of `llm_model_price`.
 export function normalizeUpstreamModel(upstreamModelId: string): string {
   return upstreamModelId.replace(/^gpt:\/\/[^/]+\//, "")

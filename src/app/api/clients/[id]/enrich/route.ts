@@ -3,7 +3,7 @@ import { enrichClientFromWeb } from "@/server/clients"
 
 export { type EnrichClientResult } from "@/server/clients"
 
-// One client per request — fits the ~55s two-pass grounded-Gemini budget.
+// One client per request — fits the ~55s two-pass search + extraction budget.
 // The browser loop POSTs one of these per pending client, so no single
 // request runs long enough to time out.
 export const maxDuration = 60

@@ -13,9 +13,7 @@ export function buildStage3Profile(input: unknown, enable: readonly string[]) {
   const ocr = enable.includes("pdf")
   const speech = enable.some((name) => ["audio", "voice"].includes(name))
   const search = enable.includes("search")
-  if (!config.models["yandex-vision"] || !config.services.ocr.connectionId || !config.services.speech.connectionId || !config.services.search.connectionId) {
-    throw new AiConfigurationError("Use the canonical Yandex config as input")
-  }
+  if (!config.models["yandex-vision"]) throw new AiConfigurationError("Use the canonical Yandex config as input")
   config.models["yandex-vision"].enabled = vision
   const tasks = { describeImage: vision, parseImage: enable.includes("images"), parsePdf: enable.includes("pdf"),
     parseAudio: enable.includes("audio"), parseVideo: false, webSearch: search, companyResearch: search, companyExtraction: search }
@@ -24,13 +22,13 @@ export function buildStage3Profile(input: unknown, enable: readonly string[]) {
     if (!definition) throw new AiConfigurationError("Missing stage-3 task")
     definition.enabled = enabled
   }
-  config.services.ocr.enabled = ocr
-  config.services.speech.enabled = speech
-  config.services.search.enabled = search
-  config.policy.features.webSearch = search
-  config.policy.features.serverSpeechRecognition = enable.includes("voice")
-  config.policy.features.browserSpeechRecognition = false
-  config.policy.features.websiteFetch = false
+  config.services.ocr = ocr
+  config.services.speech = speech
+  config.services.search = search
+  config.features.webSearch = search
+  config.features.serverSpeechRecognition = enable.includes("voice")
+  config.features.browserSpeechRecognition = false
+  config.features.websiteFetch = false
   return parseAiConfig(config)
 }
 

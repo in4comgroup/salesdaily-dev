@@ -2,28 +2,28 @@ import "server-only"
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { wrapLanguageModel } from "ai"
-import { AiConfigurationError, type AiConnection, type AiEnvironment } from "../config"
+import { AiConfigurationError } from "../config"
 import { AiPolicyError } from "../policy"
 import { AiProviderError } from "../errors"
 import { redactDiagnosticBody, type AiDiagnostics } from "../diagnostics"
 
+export type YandexAccess = {
+  apiUrl: string // origin, from resolveYandexApiUrl()
+  apiKey: string
+  folderId: string
+}
+
 export function createYandexAdapter(
-  connection: Extract<AiConnection, { adapter: "yandex-openai-compatible" }>,
-  env: AiEnvironment,
+  access: YandexAccess,
   fetchImplementation: typeof fetch = fetch,
   diagnostics?: AiDiagnostics,
 ) {
-  const apiKey = env[connection.credentialsEnv]?.trim()
-  const folderId = env[connection.folderIdEnv]?.trim()
-  if (!apiKey || !folderId) throw new AiConfigurationError("Yandex AI credentials and folder ID are required")
-  if (!/^[\x21-\x7e]+$/.test(apiKey)) {
-    throw new AiConfigurationError("Yandex API key must contain only printable ASCII characters without spaces")
-  }
-  if (!/^[a-zA-Z0-9_-]+$/.test(folderId)) throw new AiConfigurationError("Invalid Yandex AI folder ID")
+  const { apiKey, folderId } = access
+  const baseUrl = `${access.apiUrl}/v1`
 
   const provider = createOpenAICompatible({
     name: "yandex",
-    baseURL: connection.baseUrl,
+    baseURL: baseUrl,
     supportsStructuredOutputs: true,
     // No apiKey option: explicitly use Yandex's API-key authorization scheme.
     headers: {
@@ -33,7 +33,7 @@ export function createYandexAdapter(
     },
     fetch: async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input))
-      if (url.href !== `${connection.baseUrl}/chat/completions`) {
+      if (url.href !== `${baseUrl}/chat/completions`) {
         throw new AiConfigurationError("Unexpected Yandex AI request destination")
       }
       // Prevent request-level overrides and cross-host redirects. Keep model

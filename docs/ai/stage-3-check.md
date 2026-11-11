@@ -23,12 +23,14 @@ node tools/ai/run.mjs profile \
 
 | Функция | Переключатели при ручном редактировании |
 | --- | --- |
-| Изображения | `tasks.parseImage.enabled`, `tasks.describeImage.enabled`, `models.yandex-vision.enabled`; `preprocessing.images=vision` |
-| PDF | `tasks.parsePdf.enabled`, `services.ocr.enabled`; `preprocessing.pdf=ocr`. Vision-модель не требуется |
-| Аудио | `tasks.parseAudio.enabled`, `services.speech.enabled`; `preprocessing.audio=speechkit` |
-| Поиск / исследование компаний | `services.search.enabled`, `policy.features.webSearch`, задачи `webSearch`, `companyResearch`, `companyExtraction` |
-| Микрофон | `policy.features.serverSpeechRecognition`, `services.speech.enabled`; задача `parseAudio` отдельно не обязательна |
-| Видео | `tasks.parseVideo.enabled=false`, `preprocessing.video=disabled` в Yandex. Legacy-маршрут сохранён в отдельном разрешённом профиле |
+| Изображения | `tasks.parseImage.enabled`, `tasks.describeImage.enabled`, `models.yandex-vision.enabled`; `files.images=vision` |
+| PDF | `tasks.parsePdf.enabled`, `services.ocr=true`. Vision-модель не требуется |
+| Аудио | `tasks.parseAudio.enabled`, `services.speech=true` |
+| Поиск / исследование компаний | `services.search=true`, `features.webSearch`, задачи `webSearch`, `companyResearch`, `companyExtraction` |
+| Микрофон | `features.serverSpeechRecognition`, `services.speech=true`; задача `parseAudio` отдельно не обязательна |
+| Видео | `tasks.parseVideo.enabled=false` всегда (схема не позволяет включить) |
+
+Поля приведены для схемы версии 2 (11 ноября 2026 года); до этого были `policy.features`, `services.*.enabled` и `preprocessing`.
 
 Модели по-прежнему выбираются через `defaultModel` / `allowedModels`. После изменения JSON/env требуется перезапуск.
 
@@ -130,7 +132,7 @@ SpeechKit удаляет результат в `finally` после получе
 | Отказ микрофона/нет AudioWorklet | Понятная ошибка, без внешнего браузерного STT |
 | Видео | Отказ до отправки данных в AI, задача выключена в каталоге |
 | Поиск и компания | Реальные URL из Yandex; неподтверждённые поля пустые; сайты напрямую не читаются |
-| Неверные права/отключённая функция | Ошибка без fallback в Google/Gateway; в логах нет ключей/содержимого |
+| Неверные права/отключённая функция | Ошибка без fallback на другой API; в логах нет ключей/содержимого |
 | Возврат к текстовому набору | Генерация с пустым `--enable`, обновление ConfigMap и перезапуск; чат работает, новые функции выключены |
 
 Остаются отключёнными: видео, неподдерживаемые аудиоконтейнеры, определение говорящих, прямое чтение сайтов, браузерный SpeechRecognition и вложения глобального чата. Возврат — только после отдельной разрешённой интеграции и приёмки, без скрытого внешнего провайдера.
