@@ -19,7 +19,7 @@
 
 ```mermaid
 flowchart TD
-    JSON["JSON по AI_CONFIG_PATH"] --> Runtime["getAiRuntime: конфигурация, политика, зависимости"]
+    DB["ai_config_version (БД), иначе JSON по AI_CONFIG_PATH"] --> Runtime["getAiRuntime: конфигурация, политика, зависимости"]
     Env["Серверные env / Kubernetes Secret"] --> Runtime
     API["API / серверная функция / парсер"] --> Runtime
     Runtime --> Resolve["resolve: task + необязательный modelId"]
@@ -62,7 +62,7 @@ flowchart TD
 
 [resolve.ts](../../src/server/ai/resolve.ts) создаёт приватную копию конфигурации/env, адаптер Yandex и включённые сервисы. Проверяет адрес API, ключи, каталог, URI моделей и baseline-возможности задач **без сетевых запросов**. URI должен принадлежать каталогу `YANDEX_AI_FOLDER_ID`. Ключи/URI нужны для всех включённых моделей/сервисов, даже если конкретная задача ещё не запускалась. Если ничего не включено (`blocked.json`), env не нужны.
 
-[инструментация Next.js](../../src/instrumentation.ts) вызывает runtime при запуске Node.js, кроме фазы production build. Ошибка конфигурации останавливает старт; обращения к провайдеру до первого запроса нет. `getAiRuntime()` кеширует runtime на процесс: изменение JSON/env требует перезапуска всех pod’ов, горячей загрузки нет.
+Откуда берётся конфигурация (с этапа 2 [config-in-db-spec.md](config-in-db-spec.md)): [instrumentation.ts](../../src/instrumentation.ts) при запуске Node.js (кроме production build) вызывает `startAiConfigStore()` ([ai-config-store.ts](../../src/server/ai-config-store.ts)). Порядок: активная версия из таблицы `ai_config_version` → иначе JSON по `AI_CONFIG_PATH` (ConfigMap, до этапа 4) → иначе AI выключен. Неверная активная версия выключает AI (файл не используется). Каждые 30 с store проверяет активную версию и заменяет runtime без перезапуска pod. Ошибка конфигурации не останавливает приложение. Правила выбора — [config-store.ts](../../src/server/ai/config-store.ts); runtime хранится на `globalThis` (`setAiRuntime` / `getAiRuntime` в `resolve.ts`). Версии редактирует админ платформы: «Настройки → Модели → Маршруты ИИ» ([admin-llm-routing.ts](../../src/server/admin-llm-routing.ts), [ai-routing.tsx](../../src/components/blocks/admin-llm-models/ai-routing.tsx)); загрузка из файла — `node --env-file=<env> tools/ai/run.mjs seed` ([seed.ts](../../tools/ai/seed.ts)). Обе дороги проверяют документ одинаково ([config-document.ts](../../src/server/ai/config-document.ts)). CLI и тесты без store строят runtime из файла.
 
 Профили:
 
@@ -193,6 +193,7 @@ Worklet должен поставляться вместе с `public/` и бы�
 | --- | --- |
 | [run.mjs](../../tools/ai/run.mjs) | Обёртка команд `profile`, `check`, `test`: компилирует ограниченный граф TypeScript во временный каталог и запускает Node с server-условиями; нативный tsx/esbuild не нужен |
 | [profile.ts](../../tools/ai/profile.ts) | `buildStage3Profile`: включает полный выбранный список функций и зависимости, проверяет схему, пишет явную копию JSON для деплоя; `video` отвергается. Удаляется на этапе 4 [config-in-db-spec.md](config-in-db-spec.md) |
+| [seed.ts](../../tools/ai/seed.ts) | `seed`: проверяет JSON и env без сети, дописывает URI моделей из env, пишет активную версию в `ai_config_version` (`--dry-run`, `--replace`) |
 | [check.ts](../../tools/ai/check.ts) | Проверка runtime без сети либо явные платные синтетические пробы text/structured/tools/stream/image/pdf; env-файлы автоматически не загружает |
 | [synthetic-media.ts](../../tools/ai/synthetic-media.ts) | PNG/PDF для проб без чтения пользовательских файлов |
 | [runtime.test.ts](../../tools/ai/runtime.test.ts) | Политика, адаптеры, сервисы, mock HTTP, форматы файлов, ошибки/очистка, PCM/WAV и AudioWorklet |

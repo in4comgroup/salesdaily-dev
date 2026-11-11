@@ -105,6 +105,17 @@ export const aiConfigSchema = z.strictObject({
 })
 
 export type AiConfig = z.infer<typeof aiConfigSchema>
+
+// Everything off: used when no valid configuration can be loaded. Needs no
+// env values.
+export const DISABLED_AI_CONFIG = {
+  version: 2,
+  features: { webSearch: false, websiteFetch: false, browserSpeechRecognition: false, serverSpeechRecognition: false },
+  files: { images: "vision", maxMediaSeconds: 180, pdfMaxPages: 10 },
+  services: { ocr: false, speech: false, search: false },
+  models: {},
+  tasks: {},
+} as const
 export type AiEnvironment = Readonly<Record<string, string | undefined>>
 
 export class AiConfigurationError extends Error {
@@ -117,9 +128,13 @@ export class AiConfigurationError extends Error {
 export function parseAiConfig(input: unknown): AiConfig {
   const result = aiConfigSchema.safeParse(input)
   if (!result.success) {
-    // Never include input values (which may accidentally contain secrets).
-    const paths = [...new Set(result.error.issues.map((issue) => issue.path.join(".") || "root"))]
-    throw new AiConfigurationError(`Invalid AI configuration at: ${paths.join(", ")}`)
+    // Never include input values (which may accidentally contain secrets):
+    // paths only, plus the text of our own rules (they contain no values).
+    const issues = [...new Set(result.error.issues.map((issue) => {
+      const path = issue.path.join(".") || "root"
+      return issue.code === "custom" ? `${path} (${issue.message})` : path
+    }))]
+    throw new AiConfigurationError(`Invalid AI configuration at: ${issues.join(", ")}`)
   }
   return result.data
 }

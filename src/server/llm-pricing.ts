@@ -4,9 +4,8 @@ import { randomUUID } from "node:crypto"
 import { eq, sql } from "drizzle-orm"
 import { db } from "@/db/drizzle"
 import { llmModelPrice, platformSetting } from "@/db/schema"
-import { loadAiConfig } from "@/server/ai/config"
+import { getAiRuntime } from "@/server/ai"
 import { normalizeUpstreamModel } from "@/server/ai/usage"
-import { LEGACY_MODEL_URI_ENV } from "@/server/ai/yandex-connection"
 import {
   DEFAULT_SKU_MAP,
   SKU_ID,
@@ -122,19 +121,11 @@ export async function saveSkuLink(model: string, link: SkuLink | null, updatedBy
   await writeSetting(SKU_MAP_SETTING_KEY, next, updatedBy)
 }
 
-// Upstream model names the app can call now: enabled models of the current
-// AI runtime configuration, without the folder.
-export function configuredUpstreamModels(env: Readonly<Record<string, string | undefined>> = process.env): string[] {
+// Upstream model names the app can call now: enabled models of the running AI
+// configuration, without the folder.
+export function configuredUpstreamModels(): string[] {
   try {
-    const config = loadAiConfig(env)
-    const names: string[] = []
-    for (const [id, model] of Object.entries(config.models)) {
-      if (!model.enabled) continue
-      const legacyEnv = LEGACY_MODEL_URI_ENV[id]
-      const uri = model.uri ?? (legacyEnv ? env[legacyEnv]?.trim() : undefined)
-      if (uri) names.push(normalizeUpstreamModel(uri))
-    }
-    return names
+    return getAiRuntime().modelUris().map(normalizeUpstreamModel)
   } catch {
     return []
   }

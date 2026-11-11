@@ -178,3 +178,48 @@ export function parseDecimal(raw: string): number | null {
   if (s === "") return null
   return /^\d+(\.\d+)?$/.test(s) ? Number(s) : Number.NaN
 }
+
+// ── «Маршруты ИИ» (src/server/admin-llm-routing.ts) ─────────────────────────
+
+export type AiModelDoc = {
+  enabled: boolean
+  label: string
+  uri?: string
+  capabilities: string[]
+}
+
+export type AiTaskDoc = {
+  enabled: boolean
+  defaultModel?: string
+  allowedModels: string[]
+}
+
+// Configuration document, schema version 2 (src/server/ai/config.ts).
+export type AiConfigDoc = {
+  version: 2
+  features: Record<string, boolean>
+  files: { images: "vision" | "native"; maxMediaSeconds: number; pdfMaxPages: number }
+  services: Record<string, boolean>
+  models: Record<string, AiModelDoc>
+  tasks: Record<string, AiTaskDoc>
+}
+
+export type AiRoutingState = {
+  running: {
+    source: "database" | "file" | "disabled"
+    versionId: number | null
+    lastError: string | null
+    checkedAt: string | null
+  } | null
+  activeVersionId: number | null
+  document: AiConfigDoc
+  documentSource: "database" | "file" | "disabled"
+  versions: { id: number; comment: string | null; createdAt: string; createdByName: string | null; isActive: boolean }[]
+  catalog: { tasks: string[]; capabilities: string[]; features: string[]; services: string[] }
+  env: {
+    apiUrl: string | null
+    folderId: string | null
+    keys: { name: string; present: boolean }[]
+    legacyModelUris: { modelId: string; name: string; present: boolean }[]
+  }
+}

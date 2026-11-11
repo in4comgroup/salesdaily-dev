@@ -44,7 +44,7 @@ export class AdminLlmError extends Error {
   }
 }
 
-async function requirePlatformAdmin() {
+export async function requirePlatformAdmin() {
   const session = await getServerSession()
   if (!session) throw new AdminLlmError("unauthorized", "Unauthorized")
   if (session.user.role !== "admin") throw new AdminLlmError("forbidden", "Forbidden")
