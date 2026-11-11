@@ -1,7 +1,5 @@
 "use server"
 
-import { researchYandex } from "@/server/ai/search"
-
 import { db } from "@/db/drizzle"
 import {
   client,
@@ -34,11 +32,11 @@ import {
   listTaskSummaryByClient,
   type ClientTaskSummary,
 } from "@/server/tasks"
-import { generateText, Output, stepCountIs } from "ai"
-import { google } from "@ai-sdk/google"
+import { generateText, Output } from "ai"
 import { z } from "zod"
 import { getServerSession } from "@/lib/get-session"
 import { getAiRuntime, withAiUsageContext } from "@/server/ai"
+import { researchYandex } from "@/server/ai/search"
 import { randomUUID } from "crypto"
 import { request as httpsRequest } from "node:https"
 import { request as httpRequest } from "node:http"
@@ -696,15 +694,11 @@ export async function setClientResponsible(
   return { responsibleUserId: target.id, responsibleName: target.name }
 }
 
-// ── Web lookup (Gemini + grounded google_search) ─────────────────────
-
-// External web search + extraction. Gemini 3.1 Flash Lite runs
-// `google_search` grounding alongside function tools and is cheaper than
-// 2.5 Flash; see src/lib/llm-models.ts.
+// ── Web lookup (Yandex Search API + Yandex model) ────────────────────
 
 // ── Direct homepage fetch (precision booster for the extract pass) ────
 //
-// Grounded google_search returns snippets, not full page bodies — so an
+// The Search API returns snippets, not full page bodies — so an
 // address sitting in a homepage footer / Impressum frequently never reaches
 // the model. When we already know the company's own URL, we additionally
 // fetch the homepage + a few likely contact/legal pages and feed the raw
@@ -1041,16 +1035,15 @@ const lookupExtractSchema = z.object({
 })
 
 /**
- * Run a web lookup against Gemini for the given client. Two-pass:
+ * Run a web lookup for the given client. Two-pass:
  *
- *   1. RESEARCH — call gemini-2.5-flash with the `google_search` tool.
- *      The model writes a short freeform research note about the company
- *      using whatever it learns from the web. We capture the grounded
- *      sources (URL + title) the model used.
+ *   1. RESEARCH — the Yandex Search API returns snippets; the
+ *      `companyResearch` model writes a short research note from those
+ *      snippets only. The snippet URLs are the sources.
  *
- *   2. EXTRACT — call gemini-2.5-flash again with structured-output but
- *      no tools, feeding it the research note + the input client's
- *      current fields. Returns up to 3 candidate matches.
+ *   2. EXTRACT — the `companyExtraction` model, structured output, no
+ *      tools, gets the research note + the client's current fields.
+ *      Returns up to 3 candidate matches.
  *
  * Two passes (rather than one with tools+structured-output combined)
  * keeps each call inside a known-good AI SDK shape — combining tools
@@ -1072,13 +1065,7 @@ export async function lookupClientOnWeb(
   const target = await assertClientInOrg(clientId, activeOrgId)
 
   const ai = getAiRuntime()
-  // resolveGoogleSearch has no org argument: attribute via the usage context.
-  const { researchModel, extractionModel } = withAiUsageContext({ organizationId: activeOrgId }, () => ({
-    researchModel: ai.hasService("search")
-      ? ai.resolve({ task: "companyResearch" }).model
-      : ai.resolveGoogleSearch("companyResearch"),
-    extractionModel: ai.resolve({ task: "companyExtraction" }).model,
-  }))
+  const extractionModel = ai.resolve({ task: "companyExtraction", organizationId: activeOrgId }).model
 
   // Pull active contacts for extra disambiguation context (their names +
   // emails — never the suspended ones, those are archived).
@@ -1184,38 +1171,25 @@ Search in the local language of the operator-confirmed location as well as in En
 Write 2–4 short paragraphs of research notes summarising what you found. If multiple companies share this name, note them separately, and say which one fits the operator-confirmed parameters. Do NOT fabricate facts — only state what your search results actually confirm.`
 
   // When we know the company's own URL, fetch its actual page text in
-  // parallel with the grounded research — grounding only sees snippets, so
-  // this is what reliably surfaces footer / Impressum addresses.
+  // parallel with the search — the search only sees snippets, so this is
+  // what reliably surfaces footer / Impressum addresses.
   const sitePromise = hasKnownUrl && ai.isFeatureAllowed("websiteFetch")
     ? fetchSiteTextForLookup(knownUrl)
     : Promise.resolve("")
 
-  const research = ai.hasService("search")
-    ? await researchYandex([effective.name, knownUrl, "контакты официальный сайт"].filter(Boolean).join(" ").slice(0, 400), "companyResearch", researchPrompt)
-    : await generateText({
-    model: researchModel,
-    system:
-      "You are a precise company-research assistant. Use the google_search tool to find authoritative information about the given company. Prefer official websites, LinkedIn company pages, and corporate registries over social media or aggregators. Never invent details — if a field can't be confirmed by the search results, say so explicitly.",
-    prompt: researchPrompt,
-    tools: { google_search: google.tools.googleSearch({}) },
-    // Bound the search → fetch → answer loop so the model can't spiral.
-    stopWhen: stepCountIs(5),
-    // Same input must give the same answer: two runs of this lookup used to
-    // return a different address and drop the phone entirely.
-    temperature: 0,
-  })
+  // Pass 1: Yandex Search API snippets → research notes (src/server/ai/search.ts).
+  // Without the Search API service the companyResearch task is off and this
+  // throws a policy error (no other search route).
+  const research = await withAiUsageContext({ organizationId: activeOrgId }, () => researchYandex(
+    [effective.name, knownUrl, "контакты официальный сайт"].filter(Boolean).join(" ").slice(0, 400),
+    "companyResearch",
+    researchPrompt,
+  ))
 
   const siteText = await sitePromise
 
-  // Grounded Gemini exposes the URLs it consulted on `result.sources`.
-  // The Source union has both 'url' and 'document' variants — narrow to
-  // url before we read .url / .title.
-  const sources: ClientLookupSource[] = (research.sources ?? []).flatMap(
-    (s) =>
-      s.sourceType === "url"
-        ? [{ url: s.url, title: s.title ?? s.url }]
-        : [],
-  )
+  // The search snippets' URLs are the sources the notes may cite.
+  const sources: ClientLookupSource[] = research.sources.map((s) => ({ url: s.url, title: s.title || s.url }))
 
   // ── Pass 2: structured extraction ───────────────────────────────────
   const extractPrompt = hasKnownUrl

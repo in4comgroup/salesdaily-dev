@@ -671,9 +671,9 @@ function FieldRow({
   )
 }
 
-// Gemini's grounded search returns redirect URLs whose host is the same for
-// every source, so the publisher only exists in the title. Show that instead —
-// otherwise the whole list reads "vertexaisearch.cloud.google.com".
+// Search redirect URLs (e.g. from older Google-grounded lookups) have the same
+// host for every source, so the publisher only exists in the title. Show that
+// instead — otherwise the whole list reads "vertexaisearch.cloud.google.com".
 const REDIRECT_HOSTS = ["vertexaisearch.cloud.google.com", "googleusercontent.com"]
 
 function sourceLabel(s: ClientLookupSource): string {

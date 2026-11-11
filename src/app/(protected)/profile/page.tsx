@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LoadingButton } from "@/components/blocks/loading-button"
-import ResetPasswordForm from "@/components/forms/form-reset-password"
 import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 import { PageLoader } from "@/components/blocks/page-loader"
 import { EditableAvatar } from "@/components/blocks/editable-avatar"
@@ -273,7 +272,6 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: () => void }) {
                 />
               </div>
 
-              <ResetPasswordForm />
             </div>
 
             <div className="mt-auto flex justify-start border-t pt-4">

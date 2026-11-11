@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState } from "react"
 import { authClient } from "@/lib/auth-client"
 import {
   Card,
@@ -10,7 +10,7 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { LoadingButton } from "@/components/blocks/loading-button"
-import { PasswordInput } from "@/components/blocks/password-input"
+import { OtpCodeStep } from "@/components/forms/otp-code-step"
 import { Input } from "@/components/ui/input"
 import {
   Form,
@@ -23,7 +23,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import {
   CheckCircle,
   XCircle,
@@ -33,7 +32,7 @@ import {
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { passwordSchema } from "@/lib/validation"
+import { authErrorMessage, sendLoginCode, verifyLoginCode } from "@/lib/auth-otp-client"
 import type { PublicInvitation } from "@/server/invitations"
 
 type InvitationInfo = {
@@ -43,6 +42,7 @@ type InvitationInfo = {
   organizationName: string | null
   status: string
   expired: boolean
+  hasAccount: boolean
 }
 
 export function AcceptInvitationContent({
@@ -226,10 +226,10 @@ export function AcceptInvitationContent({
   // --- Not signed in -----------------------------------------------------
   return (
     <Centered>
-      <SignUpForInvitation
+      <JoinByCode
         invitation={invitation}
         onDone={async () => {
-          // After successful signup the user is signed in; now accept + set active.
+          // After the code sign-in the user has a session; now accept + set active.
           await acceptNow()
         }}
       />
@@ -268,180 +268,151 @@ function resolveInvitation(initial: PublicInvitation | null): {
       organizationName: initial.organizationName,
       status: initial.status,
       expired: initial.expired,
+      hasAccount: initial.hasAccount,
     },
     invitationError: null,
   }
 }
 
 // -----------------------------------------------------------------------------
-// Signup form (email locked to invitation.email)
+// Sign-in / sign-up by email code (email locked to invitation.email)
 // -----------------------------------------------------------------------------
 
-const signupSchema = z
-  .object({
-    name: z.string().min(1, { message: "Введите имя" }),
-    password: passwordSchema,
-    passwordConfirmation: z
-      .string()
-      .min(1, { message: "Подтвердите пароль" }),
-  })
-  .refine((d) => d.password === d.passwordConfirmation, {
-    message: "Пароли не совпадают",
-    path: ["passwordConfirmation"],
-  })
+const nameSchema = z.object({
+  name: z.string().trim().min(1, { message: "Введите имя" }),
+})
+// An existing account needs no name: the field is hidden and not checked.
+const noNameSchema = z.object({ name: z.string() })
+type NameValues = z.infer<typeof nameSchema>
 
-type SignupValues = z.infer<typeof signupSchema>
-
-function SignUpForInvitation({
+// One flow for new and existing accounts: a code goes to the invited email;
+// the code sign-in creates the account when there is none (with the name
+// entered here) or signs in the existing one. Then the invitation is accepted.
+function JoinByCode({
   invitation,
   onDone,
 }: {
   invitation: InvitationInfo
   onDone: () => Promise<void>
 }) {
-  const [isPending, startTransition] = useTransition()
+  const [step, setStep] = useState<"start" | "otp">("start")
+  const [name, setName] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
 
-  const form = useForm<SignupValues>({
-    resolver: zodResolver(signupSchema),
-    defaultValues: {
-      name: "",
-      password: "",
-      passwordConfirmation: "",
-    },
+  const form = useForm<NameValues>({
+    resolver: zodResolver(invitation.hasAccount ? noNameSchema : nameSchema),
+    defaultValues: { name: "" },
   })
 
-  function onSubmit(values: SignupValues) {
-    startTransition(async () => {
-      setFormError(null)
-      const { error } = await authClient.signUp.email({
-        name: values.name,
-        email: invitation.email,
-        password: values.password,
-      })
-      if (error) {
-        if (error.status === 422) {
-          const msg =
-            "Аккаунт с этим email уже существует — войдите вместо регистрации."
-          setFormError(msg)
-          toast.error(msg)
-        } else {
-          const msg = error.message || "Не удалось создать аккаунт"
-          setFormError(msg)
-          toast.error(msg)
-        }
-        return
-      }
-      await onDone()
-    })
+  async function requestCode(enteredName: string) {
+    setFormError(null)
+    const { error } = await sendLoginCode(invitation.email, "sign-up")
+    if (error) {
+      const msg = authErrorMessage(error, error.message || "Не удалось отправить код")
+      setFormError(msg)
+      toast.error(msg)
+      return
+    }
+    setName(enteredName)
+    setStep("otp")
   }
+
+  async function onVerify(otp: string) {
+    const { error } = await verifyLoginCode(invitation.email, otp, invitation.hasAccount ? undefined : name)
+    if (error) return error
+    await onDone()
+    return null
+  }
+
+  const orgLine = invitation.organizationName ? (
+    <>
+      Присоединиться к <strong>{invitation.organizationName}</strong>.{" "}
+    </>
+  ) : null
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="text-lg">Вас пригласили</CardTitle>
         <CardDescription>
-          {invitation.organizationName ? (
+          {orgLine}
+          {step === "otp" ? (
             <>
-              Присоединиться к <strong>{invitation.organizationName}</strong>.
-              Создайте аккаунт для{" "}
-              <strong className="text-foreground">{invitation.email}</strong>
-              .
+              Мы отправили 6-значный код на{" "}
+              <strong className="text-foreground">{invitation.email}</strong>.
+            </>
+          ) : invitation.hasAccount ? (
+            <>
+              Войдите в аккаунт{" "}
+              <strong className="text-foreground">{invitation.email}</strong> по коду из
+              письма.
             </>
           ) : (
             <>
               Создайте аккаунт для{" "}
-              <strong className="text-foreground">{invitation.email}</strong>
-              .
+              <strong className="text-foreground">{invitation.email}</strong>.
             </>
           )}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input value={invitation.email} disabled />
-              </FormControl>
-              <p className="text-xs text-muted-foreground">
-                Привязан к приглашённому адресу.
-              </p>
-            </FormItem>
-
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Имя</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ваше имя" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        {step === "otp" ? (
+          <div key="otp">
+            <OtpCodeStep
+              email={invitation.email}
+              intent="sign-up"
+              submitLabel={invitation.hasAccount ? "Войти и принять приглашение" : "Создать аккаунт и принять приглашение"}
+              onVerify={onVerify}
+              onBack={invitation.hasAccount ? undefined : () => setStep("start")}
+              backLabel="Изменить имя"
             />
+          </div>
+        ) : (
+          <Form key="start" {...form}>
+            <form
+              onSubmit={form.handleSubmit(async ({ name }) => {
+                await requestCode(name.trim())
+              })}
+              className="space-y-4"
+            >
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input value={invitation.email} disabled />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  Привязан к приглашённому адресу.
+                </p>
+              </FormItem>
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Пароль</FormLabel>
-                  <FormControl>
-                    <PasswordInput
-                      autoComplete="new-password"
-                      placeholder="Пароль"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              {!invitation.hasAccount && (
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Имя</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ваше имя" autoComplete="name" autoFocus {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            />
 
-            <FormField
-              control={form.control}
-              name="passwordConfirmation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Подтвердите пароль</FormLabel>
-                  <FormControl>
-                    <PasswordInput
-                      autoComplete="new-password"
-                      placeholder="Подтвердите пароль"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              {formError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {formError}
+                </p>
               )}
-            />
 
-            {formError && (
-              <p role="alert" className="text-sm text-red-600">
-                {formError}
-              </p>
-            )}
-
-            <LoadingButton type="submit" loading={isPending} className="w-full">
-              Создать аккаунт и принять приглашение
-            </LoadingButton>
-          </form>
-        </Form>
-
-        <div className="mt-4 pt-4 border-t text-center text-xs text-muted-foreground">
-          Уже есть аккаунт с <strong>{invitation.email}</strong>?{" "}
-          <Link
-            href={`/sign-in?callbackURL=/accept-invitation/${invitation.id}`}
-            className="underline"
-          >
-            Войдите
-          </Link>{" "}
-          — и вы вернётесь сюда, чтобы принять приглашение.
-        </div>
+              <LoadingButton type="submit" loading={form.formState.isSubmitting} className="w-full">
+                Получить код
+              </LoadingButton>
+            </form>
+          </Form>
+        )}
       </CardContent>
     </Card>
   )

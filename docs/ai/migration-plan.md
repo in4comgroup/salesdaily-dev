@@ -133,7 +133,7 @@ SpeechKit, Vision OCR и Search API — кандидаты внутри экос
 Реализованы строгие JSON-профили:
 
 - `config/ai/blocked.json` — запрет всех AI-задач.
-- `config/ai/legacy.json` — существующие провайдеры через явный Vercel Gateway.
+- `config/ai/legacy.json` — существующие провайдеры через явный Vercel Gateway. Удалён 11 ноября 2026 года вместе с адаптером Gateway (только Yandex).
 - `config/ai/yandex.json` — прямой Yandex для текстовых задач, остальные возможности выключены.
 
 Фактическая схема находится в `src/server/ai/config.ts`. Подключение Yandex содержит `enabled`, `adapter`, фиксированный `baseUrl`, ссылки `credentialsEnv` и `folderIdEnv`; запись модели — `upstreamModelIdEnv` с полным model URI. Адрес, схема авторизации и обязательное отключение логирования в адаптере не меняются произвольными заголовками конфигурации.

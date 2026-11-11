@@ -1,10 +1,7 @@
 "use client"
 
-import { GitHubIcon } from "@/components/icons/GitHubIcon"
-import { GoogleIcon } from "@/components/icons/GoogleIcon"
 import { LoadingButton } from "@/components/blocks/loading-button"
-import { PasswordInput } from "@/components/blocks/password-input"
-import { Button } from "@/components/ui/button"
+import { OtpCodeStep } from "@/components/forms/otp-code-step"
 import {
   Card,
   CardContent,
@@ -13,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Form,
   FormControl,
@@ -23,77 +19,63 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { toast } from "sonner"
-import { authClient } from "@/lib/auth-client"
+import {
+  authErrorMessage,
+  safeRedirect,
+  sendLoginCode,
+  verifyLoginCode,
+} from "@/lib/auth-otp-client"
 import { zodResolver } from "@hookform/resolvers/zod"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
+import { toast } from "sonner"
 import { z } from "zod"
 
-const signInSchema = z.object({
+const emailSchema = z.object({
   email: z.email({ message: "Введите корректный email" }),
-  password: z.string().min(1, { message: "Введите пароль" }),
-  rememberMe: z.boolean().optional(),
 })
+type EmailValues = z.infer<typeof emailSchema>
 
-type SignInValues = z.infer<typeof signInSchema>
-
+// Passwordless sign-in: email → 6-digit code from the email → signed in.
+// Unknown emails get no code (server hook in src/lib/auth.ts), and the screen
+// says the same thing in both cases, so it does not show who has an account.
 export function SignInForm() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get("redirect") || "/dashboard"
+  // `callbackURL` is the older name of the same parameter (invitation links).
+  const redirect = safeRedirect(searchParams.get("redirect") ?? searchParams.get("callbackURL"))
 
-  const form = useForm<SignInValues>({
-    resolver: zodResolver(signInSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      rememberMe: false,
-    },
+  const [step, setStep] = useState<"email" | "otp">("email")
+  const [email, setEmail] = useState("")
+  const [error, setError] = useState<string | null>(null)
+
+  const form = useForm<EmailValues>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: "" },
   })
 
-  async function onSubmit({ email, password, rememberMe }: SignInValues) {
+  async function onRequestCode({ email }: EmailValues) {
     setError(null)
-    setLoading(true)
-
-    const { error } = await authClient.signIn.email({
-      email: email,
-      password: password,
-      rememberMe: rememberMe,
-    })
-
-    setLoading(false)
-
+    const { error } = await sendLoginCode(email, "sign-in")
     if (error) {
-      setError(error.message || "Неизвестная ошибка авторизации")
-      toast.error(error.message || "Неизвестная ошибка авторизации")
-    } else {
-      toast.success("Вход выполнен успешно!")
-      router.push(redirect)
+      const msg = authErrorMessage(error, error.message || "Не удалось отправить код")
+      setError(msg)
+      toast.error(msg)
+      return
     }
+    setEmail(email.trim().toLowerCase())
+    setStep("otp")
   }
 
-  async function handleSocialSignIn(provider: "google" | "github") {
-    setError(null)
-    setLoading(true)
-
-    const { error } = await authClient.signIn.social({
-      provider,
-      callbackURL: redirect,
-    })
-
-    setLoading(false)
-    toast.success("Перенаправляем к внешнему провайдеру для авторизации…")
-
-    if (error) {
-      setError(error.message || "Неизвестная ошибка авторизации")
-      toast.error(error.message || "Неизвестная ошибка авторизации")
-    }
+  async function onVerify(otp: string) {
+    const { error } = await verifyLoginCode(email, otp)
+    if (error) return error
+    toast.success("Вход выполнен")
+    router.push(redirect)
+    router.refresh()
+    return null
   }
 
   return (
@@ -101,117 +83,67 @@ export function SignInForm() {
       <CardHeader>
         <CardTitle className="text-lg md:text-xl">Вход</CardTitle>
         <CardDescription className="text-xs md:text-sm">
-          Войдите в аккаунт по email или через внешних провайдеров
+          {step === "email" ? (
+            "Введите email. Мы отправим на него код для входа."
+          ) : (
+            <>
+              Если аккаунт с адресом <strong className="text-foreground">{email}</strong> есть, мы
+              отправили на него 6-значный код.
+            </>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="your@email.com"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        {/* Distinct keys: without them React reuses the email field's
+            Controller for the code input, which then rejects every keystroke. */}
+        {step === "email" ? (
+          <Form key="email" {...form}>
+            <form onSubmit={form.handleSubmit(onRequestCode)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="your@email.com"
+                        autoComplete="email"
+                        autoFocus
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {error && (
+                <div role="alert" className="text-sm text-red-600">
+                  {error}
+                </div>
               )}
+
+              <LoadingButton type="submit" className="w-full" loading={form.formState.isSubmitting}>
+                Получить код
+              </LoadingButton>
+            </form>
+          </Form>
+        ) : (
+          <div key="otp">
+            <OtpCodeStep
+              email={email}
+              intent="sign-in"
+              submitLabel="Войти"
+              onVerify={onVerify}
+              onBack={() => {
+                setStep("email")
+                setError(null)
+              }}
             />
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="flex items-center">
-                    <FormLabel>Пароль</FormLabel>
-                    <Link
-                      href="/forgot-password"
-                      className="ml-auto inline-block text-sm underline"
-                    >
-                      Забыли пароль?
-                    </Link>
-                  </div>
-                  <FormControl>
-                    <PasswordInput
-                      autoComplete="current-password"
-                      placeholder="Пароль"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="rememberMe"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel>Запомнить меня</FormLabel>
-                </FormItem>
-              )}
-            />
-
-            {error && (
-              <div role="alert" className="text-sm text-red-600">
-                {error}
-              </div>
-            )}
-
-            <LoadingButton type="submit" className="w-full" loading={loading}>
-              Войти
-            </LoadingButton>
-
-            <div className="flex w-full flex-col items-center justify-between gap-4 mt-4">
-              <Button
-                asChild
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                disabled={loading}
-              >
-                <Link href="/sign-in/otp">Войти по одноразовому коду (email)</Link>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                disabled={loading}
-                onClick={() => handleSocialSignIn("google")}
-              >
-                <GoogleIcon width="0.98em" height="1em" />
-                Войти через Google
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                disabled={loading}
-                onClick={() => handleSocialSignIn("github")}
-              >
-                <GitHubIcon />
-                Войти через GitHub
-              </Button>
-            </div>
-          </form>
-        </Form>
+          </div>
+        )}
       </CardContent>
       <CardFooter>
         <div className="flex w-full justify-center border-t pt-4">

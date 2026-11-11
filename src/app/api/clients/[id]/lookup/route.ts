@@ -8,8 +8,8 @@ export {
   type ClientLookupHints,
 } from "@/server/clients"
 
-// Allow up to 60s — the two-pass Gemini call can take 8-15s typically
-// but grounded search has occasional long tails.
+// Allow up to 60s — the two-pass search + extraction typically takes 8-15s
+// but has occasional long tails.
 export const maxDuration = 60
 
 function errorResponse(error: unknown) {

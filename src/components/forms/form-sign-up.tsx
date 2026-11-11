@@ -1,7 +1,7 @@
 "use client"
 
 import { LoadingButton } from "@/components/blocks/loading-button"
-import { PasswordInput } from "@/components/blocks/password-input"
+import { OtpCodeStep } from "@/components/forms/otp-code-step"
 import {
   Card,
   CardContent,
@@ -19,62 +19,48 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { toast } from "sonner"
-import { passwordSchema } from "@/lib/validation"
+import { authErrorMessage, sendLoginCode, verifyLoginCode } from "@/lib/auth-otp-client"
 import { zodResolver } from "@hookform/resolvers/zod"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
-import { authClient } from "@/lib/auth-client"
+import { toast } from "sonner"
 import { z } from "zod"
 
-const signUpSchema = z
-  .object({
-    name: z.string().min(1, { message: "Введите имя" }),
-    email: z.email({ message: "Введите корректный email" }),
-    password: passwordSchema,
-    passwordConfirmation: z
-      .string()
-      .min(1, { message: "Подтвердите пароль" }),
-  })
-  .refine((data) => data.password === data.passwordConfirmation, {
-    message: "Пароли не совпадают",
-    path: ["passwordConfirmation"],
-  })
-
+const signUpSchema = z.object({
+  name: z.string().trim().min(1, { message: "Введите имя" }),
+  email: z.email({ message: "Введите корректный email" }),
+})
 type SignUpValues = z.infer<typeof signUpSchema>
 
+// Passwordless registration: name + email → 6-digit code from the email →
+// the account is created on the first code sign-in (emailOTP plugin, sign-up
+// intent). If the email already has an account, the code just signs it in.
 export function SignUpForm() {
-  const [error, setError] = useState<string | null>(null)
-  const [pendingInviteEmail, setPendingInviteEmail] = useState<string | null>(
-    null,
-  )
-
   const router = useRouter()
+  const [step, setStep] = useState<"details" | "otp">("details")
+  const [values, setValues] = useState<SignUpValues | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [pendingInviteEmail, setPendingInviteEmail] = useState<string | null>(null)
 
   const form = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      passwordConfirmation: "",
-    },
+    defaultValues: { name: "", email: "" },
   })
 
-  async function onSubmit({ email, password, name }: SignUpValues) {
+  async function onRequestCode(data: SignUpValues) {
     setError(null)
     setPendingInviteEmail(null)
+    const email = data.email.trim().toLowerCase()
 
-    // Block standalone signup if the email has a live invitation — the user
+    // Block standalone sign-up if the email has a live invitation — the user
     // should use the invite link instead (so they end up in the inviter's org
-    // rather than a fresh "My Organization").
+    // rather than a fresh «Моя организация»).
     try {
-      const res = await fetch(
-        `/api/invitations/check?email=${encodeURIComponent(email)}`,
-        { cache: "no-store" },
-      )
+      const res = await fetch(`/api/invitations/check?email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+      })
       if (res.ok) {
         const body = (await res.json()) as { hasPending?: boolean }
         if (body.hasPending) {
@@ -83,39 +69,43 @@ export function SignUpForm() {
         }
       }
     } catch {
-      // If the check endpoint fails we let signup proceed — better to allow
-      // creation than block indefinitely on a transient error.
+      // Fail open: the user.create.after hook still skips the default org.
     }
 
-    const { error } = await authClient.signUp.email({
-      email: email,
-      password: password,
-      name: name,
-      callbackURL: "/account",
-    })
-
+    const { error } = await sendLoginCode(email, "sign-up")
     if (error) {
-      if (error.status === 422) {
-        setError("Этот email уже используется, выберите другой")
-        toast.error("Этот email уже используется, выберите другой")
-      } else {
-        setError(error.message || "Неизвестная ошибка авторизации")
-        toast.error(error.message || "Неизвестная ошибка авторизации")
-      }
-    } else {
-      toast.success("Регистрация прошла успешно!")
-      router.push("/dashboard")
+      const msg = authErrorMessage(error, error.message || "Не удалось отправить код")
+      setError(msg)
+      toast.error(msg)
+      return
     }
+    setValues({ name: data.name.trim(), email })
+    setStep("otp")
   }
 
-  const loading = form.formState.isSubmitting
+  async function onVerify(otp: string) {
+    if (!values) return null
+    const { error } = await verifyLoginCode(values.email, otp, values.name)
+    if (error) return error
+    toast.success("Добро пожаловать!")
+    router.push("/dashboard")
+    router.refresh()
+    return null
+  }
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="text-lg md:text-xl">Регистрация</CardTitle>
         <CardDescription className="text-xs md:text-sm">
-          Введите свои данные, чтобы создать аккаунт
+          {step === "details" || !values ? (
+            "Введите имя и email. Мы отправим на email код для подтверждения."
+          ) : (
+            <>
+              Мы отправили 6-значный код на{" "}
+              <strong className="text-foreground">{values.email}</strong>.
+            </>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -126,102 +116,78 @@ export function SignUpForm() {
           >
             <p className="font-medium">У вас есть активное приглашение.</p>
             <p className="mt-1 text-xs">
-              Организация уже пригласила{" "}
-              <strong>{pendingInviteEmail}</strong>. Пожалуйста, используйте
-              ссылку-приглашение из письма, чтобы присоединиться. Если её нет,
+              Организация уже пригласила <strong>{pendingInviteEmail}</strong>. Пожалуйста,
+              используйте ссылку-приглашение из письма, чтобы присоединиться. Если её нет,
               попросите администратора организации отправить её повторно.
             </p>
           </div>
         )}
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Имя</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Иван Иванов" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        {step === "details" || !values ? (
+          <Form key="details" {...form}>
+            <form onSubmit={form.handleSubmit(onRequestCode)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Имя</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Иван Иванов" autoComplete="name" autoFocus {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="your@email.com"
+                        autoComplete="email"
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          if (pendingInviteEmail) setPendingInviteEmail(null)
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {error && (
+                <div role="alert" className="text-sm text-red-600">
+                  {error}
+                </div>
               )}
+
+              <LoadingButton type="submit" className="w-full mt-2" loading={form.formState.isSubmitting}>
+                Получить код
+              </LoadingButton>
+            </form>
+          </Form>
+        ) : (
+          <div key="otp">
+            <OtpCodeStep
+              email={values.email}
+              intent="sign-up"
+              submitLabel="Создать аккаунт"
+              onVerify={onVerify}
+              onBack={() => {
+                setStep("details")
+                setError(null)
+              }}
+              backLabel="Изменить данные"
             />
-
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="your@email.com"
-                      {...field}
-                      onChange={(e) => {
-                        field.onChange(e)
-                        if (pendingInviteEmail) setPendingInviteEmail(null)
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Пароль</FormLabel>
-                  <FormControl>
-                    <PasswordInput
-                      autoComplete="new-password"
-                      placeholder="Пароль"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="passwordConfirmation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Подтвердите пароль</FormLabel>
-                  <FormControl>
-                    <PasswordInput
-                      autoComplete="new-password"
-                      placeholder="Подтвердите пароль"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {error && (
-              <div role="alert" className="text-sm text-red-600">
-                {error}
-              </div>
-            )}
-
-            <LoadingButton
-              type="submit"
-              className="w-full mt-2"
-              loading={loading}
-            >
-              Создать аккаунт
-            </LoadingButton>
-          </form>
-        </Form>
+          </div>
+        )}
       </CardContent>
       <CardFooter>
         <div className="flex w-full justify-center border-t pt-4">

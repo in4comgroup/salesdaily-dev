@@ -55,10 +55,10 @@ function toSourceHit(row: SourceItemRow) {
   }
 }
 
-// The web half of the engine. `searchWeb` runs its own grounded Gemini
-// sub-call (see src/server/web-search.ts for why Google's `google_search`
-// can't just be passed through to the chat model) so it is provider-agnostic
-// and always registered — no session or org needed to read the public web.
+// The web half of the engine. `searchWeb` runs its own sub-call (Yandex
+// Search API snippets → Yandex model, see src/server/web-search.ts), so the
+// chat model never searches by itself. Registered when the webSearch feature
+// and task are on — no session or org needed to read the public web.
 const buildWebTools = (organizationId: string | null) => ({
   searchWeb: tool({
     description:
@@ -304,15 +304,13 @@ export async function POST(req: Request) {
     // organizationId → metered in llm_usage + the org's daily cost cap.
     const aiRoute = ai.resolve({ task: "chat", modelId: modelKey, organizationId: sourceOrgId })
     const webEnabled = ai.isFeatureAllowed("webSearch") && ai.listModels("webSearch").length > 0
-    assertChatContentAllowed(messages, aiRoute.adapter)
+    assertChatContentAllowed(messages)
 
     // ── One universal search engine ───────────────────────────────────
     //
     // There used to be two mutually exclusive toggles ("внутренние
-    // источники" / "веб-поиск"), because Google's built-in google_search
-    // tool and custom function tools don't coexist on Gemini. Web search is
-    // now an ordinary function tool of our own (`searchWeb`), so that
-    // conflict is gone: every request gets whichever tools the caller is
+    // источники" / "веб-поиск"). Web search is an ordinary function tool of
+    // our own (`searchWeb`), so internal and web tools coexist: every request gets whichever tools the caller is
     // actually entitled to, and the model picks.
     //
     // Internal tools require an authenticated session AND an active
@@ -331,7 +329,6 @@ export async function POST(req: Request) {
 
     console.log(
       "[chat] route:",
-      aiRoute.connectionId,
       aiRoute.modelId,
       "org:",
       sourceOrgId ?? "-",

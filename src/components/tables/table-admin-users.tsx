@@ -22,7 +22,6 @@ import { Badge } from "@/components/ui/badge"
 import { authClient } from "@/lib/auth-client"
 import { Loader, RefreshCcw } from "lucide-react"
 import AdminEditUserDialog from "@/components/forms/form-admin-edit-user"
-import AdminSetPasswordDialog from "@/components/forms/form-admin-set-password"
 import AdminSetRoleDialog from "@/components/forms/form-admin-set-role"
 import AdminBanUserDialog from "@/components/forms/form-admin-ban-user"
 import AdminSetOrgRoleDialog from "@/components/forms/form-admin-set-org-role"
@@ -282,11 +281,6 @@ export function TableAdminUsers() {
                       <div className="flex items-center gap-1">
                         <AdminEditUserDialog
                           user={user}
-                          onSuccess={refresh}
-                        />
-                        <AdminSetPasswordDialog
-                          userId={user.id}
-                          userName={user.name}
                           onSuccess={refresh}
                         />
                         <AdminSetRoleDialog

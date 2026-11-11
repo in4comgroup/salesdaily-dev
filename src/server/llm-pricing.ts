@@ -6,6 +6,7 @@ import { db } from "@/db/drizzle"
 import { llmModelPrice, platformSetting } from "@/db/schema"
 import { loadAiConfig } from "@/server/ai/config"
 import { normalizeUpstreamModel } from "@/server/ai/usage"
+import { LEGACY_MODEL_URI_ENV } from "@/server/ai/yandex-connection"
 import {
   DEFAULT_SKU_MAP,
   SKU_ID,
@@ -121,15 +122,17 @@ export async function saveSkuLink(model: string, link: SkuLink | null, updatedBy
   await writeSetting(SKU_MAP_SETTING_KEY, next, updatedBy)
 }
 
-// Upstream model names the app can call now (enabled models in the AI config).
+// Upstream model names the app can call now: enabled models of the current
+// AI runtime configuration, without the folder.
 export function configuredUpstreamModels(env: Readonly<Record<string, string | undefined>> = process.env): string[] {
   try {
     const config = loadAiConfig(env)
     const names: string[] = []
-    for (const model of Object.values(config.models)) {
+    for (const [id, model] of Object.entries(config.models)) {
       if (!model.enabled) continue
-      const upstream = model.upstreamModelId ?? (model.upstreamModelIdEnv ? env[model.upstreamModelIdEnv]?.trim() : undefined)
-      if (upstream) names.push(normalizeUpstreamModel(upstream))
+      const legacyEnv = LEGACY_MODEL_URI_ENV[id]
+      const uri = model.uri ?? (legacyEnv ? env[legacyEnv]?.trim() : undefined)
+      if (uri) names.push(normalizeUpstreamModel(uri))
     }
     return names
   } catch {

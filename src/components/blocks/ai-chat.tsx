@@ -152,7 +152,9 @@ export function AIChat({ className }: { className?: string }) {
 
   // Model selection and optional features come from deployment policy.
   const currentModel = ai.currentModel
-  const attachmentsEnabled = Boolean(currentModel?.capabilities.includes("image"))
+  // The chat is text-only: the server refuses file parts
+  // (assertChatContentAllowed). Files go through Sources.
+  const attachmentsEnabled = false
 
   // Stable transport that reads the latest model at request time via a ref —
   // avoids recreating the transport on every state change.

@@ -3,19 +3,15 @@ import "server-only"
 import { AI_CAPABILITIES, type AiCapability, type AiConfig, type AiTask } from "./config"
 import { AiPolicyError, authorizeAiModel } from "./policy"
 
-// Baseline requirements cannot be relaxed by caller configuration.
+// Baseline requirements cannot be relaxed by caller configuration. PDF and
+// audio reach the model as text (OCR / SpeechKit), web search as snippets
+// from the Search API.
 export function requiredTaskCapabilities(task: AiTask, config?: AiConfig): readonly AiCapability[] {
   if (task === "describeImage") return ["text", "image"]
-  if ((task === "parseImage" && config?.preprocessing.images === "vision") ||
-      (task === "parsePdf" && config?.preprocessing.pdf === "ocr")) return ["text", "structuredOutput"]
-  if (task === "parseAudio" && config?.preprocessing.audio === "speechkit") return ["text", "structuredOutput"]
-  if ((task === "webSearch" || task === "companyResearch") && config?.services.search.enabled) return ["text"]
   if (task === "chat" || task === "analytics") return ["text", "tools", "streaming"]
-  if (task === "webSearch" || task === "companyResearch") return ["text", "googleSearch"]
-  const media: Partial<Record<AiTask, AiCapability>> = {
-    parsePdf: "pdf", parseImage: "image", parseAudio: "audio", parseVideo: "video",
-  }
-  return ["text", "structuredOutput", ...(media[task] ? [media[task]!] : [])]
+  if (task === "webSearch" || task === "companyResearch") return ["text"]
+  if (task === "parseImage" && config?.files.images === "native") return ["text", "structuredOutput", "image"]
+  return ["text", "structuredOutput"]
 }
 
 export function listAvailableAiModels(config: AiConfig, task: AiTask) {
