@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/db/drizzle"
-import { invitation, organization } from "@/db/schema"
+import { invitation, organization, user } from "@/db/schema"
 import { and, eq, gt } from "drizzle-orm"
 
 export type PublicInvitation = {
@@ -12,6 +12,10 @@ export type PublicInvitation = {
   status: string
   expiresAt: string
   expired: boolean
+  // True when the invited email already has an account: the page then asks
+  // only for the email code, not for a name. Visible only to the holder of
+  // the (unguessable) invitation link.
+  hasAccount: boolean
 }
 
 /**
@@ -43,6 +47,12 @@ export async function getInvitationForAcceptance(
   const row = rows[0]
   if (!row) return null
 
+  const existing = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, row.email.trim().toLowerCase()))
+    .limit(1)
+
   return {
     id: row.id,
     email: row.email,
@@ -51,6 +61,7 @@ export async function getInvitationForAcceptance(
     status: row.status,
     expiresAt: row.expiresAt.toISOString(),
     expired: row.expiresAt.getTime() < Date.now(),
+    hasAccount: existing.length > 0,
   }
 }
 

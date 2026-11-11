@@ -27,10 +27,9 @@ import {
   AiBudgetError, classifyAiError, normalizeUpstreamModel, registerAiUsageSink, withAiUsageContext,
   type AiUsageEvent, type AiUsageSink,
 } from "../../src/server/ai/usage"
+import { gatewayFixture } from "./gateway-fixture"
 
-function legacy() {
-  return JSON.parse(readFileSync("config/ai/legacy.json", "utf8"))
-}
+const legacy = gatewayFixture
 function blocked() {
   return JSON.parse(readFileSync("config/ai/blocked.json", "utf8"))
 }

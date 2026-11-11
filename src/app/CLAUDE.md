@@ -29,7 +29,7 @@ All AI calls use `src/server/ai/` and mandatory `AI_CONFIG_PATH`. Node.js startu
 ## Organization Member Management
 
 - Org owners can: list members, update member roles, remove members, invite new members.
-- Org owners CANNOT: edit user data (name/email) or set passwords (admin-plugin-only operations).
+- Org owners CANNOT: edit user data (name/email) (admin-plugin-only operation). There are no passwords: sign-in is by email code.
 - Member management UI on the organization page (`/account`) → **«Участники»** tab, visible only to org owners.
 - Org-specific forms in `src/components/forms/form-set-org-role.tsx`, `form-remove-member.tsx`, `form-invite-member.tsx`.
 
@@ -56,13 +56,13 @@ Platform admins (not org owners) manage *any* user's org memberships from the Us
    - Branches:
      - **Loading** → spinner.
      - **Not found / expired / status ≠ pending** → "Invalid invitation" card with Sign-in link.
-     - **Not signed in** → inline **email-locked sign-up form** (`SignUpForInvitation`): Name + Password + Confirm. Email field is pre-filled with `invitation.email` and disabled so nobody can sign up under a different address. OTP and social login are intentionally not offered on this page (OTP is `disableSignUp: true`; social providers might return a non-matching email). Footer offers a Sign-in link with `callbackURL=/accept-invitation/<id>` for users who already have an account.
+     - **Not signed in** → inline **email-locked code form** (`JoinByCode`). Email is `invitation.email`, shown disabled. `PublicInvitation.hasAccount` picks the variant: no account → Name + «Получить код»; account exists → only «Получить код». A code goes to the invited email (sign-up intent); the code sign-in creates the account (with the name) or signs in the existing one, then the invitation is accepted. One flow for new and existing users, no detour through `/sign-in`.
      - **Signed in, emails match** → "Accept invitation" button.
      - **Signed in, emails don't match** → "Wrong account" warning + **Sign out** button. After sign-out the page re-renders into the sign-up branch.
-   - On successful submit of the sign-up form, runs in sequence: `authClient.signUp.email(...)` → `authClient.organization.acceptInvitation({ invitationId })` → `authClient.organization.setActive({ organizationId })` → push `/dashboard`. The `setActive` call is required because `session.create.before` picked `null` (no default org was created by the hook) — without it the dashboard would look empty.
-4. **Pending-invite guard on standalone sign-up** — `src/components/forms/form-sign-up.tsx` calls `GET /api/invitations/check?email=…` on submit. If the endpoint responds `{ hasPending: true }`, the form shows a blocking amber banner ("You have a pending invitation. … please ask the organization administrator to resend it") and does **not** create the account. The banner auto-clears when the user edits the email field. If the check endpoint itself errors (network hiccup), the form **fails open** and lets sign-up proceed — the `user.create.after` hook still skips default-org creation, so the two-org outcome can't happen.
+   - On a correct code, runs in sequence: `authClient.signIn.emailOtp({ email, otp, name })` → `authClient.organization.acceptInvitation({ invitationId })` → `authClient.organization.setActive({ organizationId })` → push `/dashboard`. The `setActive` call is required because `session.create.before` picked `null` (no default org was created by the hook) — without it the dashboard would look empty.
+4. **Pending-invite guard on standalone sign-up** — `src/components/forms/form-sign-up.tsx` calls `GET /api/invitations/check?email=…` before it sends the code. If the endpoint responds `{ hasPending: true }`, the form shows a blocking amber banner ("You have a pending invitation. … please ask the organization administrator to resend it") and does **not** create the account. The banner auto-clears when the user edits the email field. If the check endpoint itself errors (network hiccup), the form **fails open** and lets sign-up proceed — the `user.create.after` hook still skips default-org creation, so the two-org outcome can't happen.
 5. **Server functions** live in `src/server/invitations.ts`:
-   - `getInvitationForAcceptance(id)` — public-safe lookup for the accept page; joins `organization.name` and exposes the minimal public fields plus an `expired` flag.
+   - `getInvitationForAcceptance(id)` — public-safe lookup for the accept page; joins `organization.name` and exposes the minimal public fields plus `expired` and `hasAccount` (the invited email already has a user — visible only to the holder of the invitation link).
    - `hasPendingInvitationForEmail(email)` — boolean-only check, normalized to lowercase, filters to `status = "pending"` and `expiresAt > now`.
 
 **Minor known edge case**: if an email has a pending invite but the user signs up via `/sign-up` while the check endpoint is unreachable, they'll end up with **zero** orgs (no default org due to the hook, and the invitation isn't auto-accepted). They can still recover by opening the invite link afterwards (they're already signed in with the matching email → Accept branch) or creating a new org manually. In normal conditions the banner blocks this case.
@@ -1015,7 +1015,7 @@ The LLM pipeline. Per-item function call, bounded concurrency, hard cap 50 per c
 - **Time period** — last day / last 3 days / last week / specific dates (**default «За день» / `last_day`**).
 - **Sources** — "All org sources" checkbox, otherwise per-source checkboxes from `/api/sources/options`.
 - **Rule** — Custom-type rules from `/api/rules?type=Custom`. Defaults to the first rule in the list; an empty rule list shows a "Create a Custom rule on the Rules page first" hint.
-- **Model** — picks from `MODELS` in `src/lib/llm-models.ts` (default `DEFAULT_MODEL_KEY`). Same selector used by the chat.
+- **Model** — picks from the server AI catalogue (`useAiModels` → `/api/ai/config`, task `cards`; default = the task's `defaultModel`). Same mechanism as the chat.
 - **Re-analyze already processed items** — bypasses the `card_analysis_scanned_at` filter for ad-hoc re-runs.
 - **Preview chip** — debounced 200ms `GET /api/cards/generate` call returns the eligible-item count + cap. Shows `<count> items will be analyzed (<extra> more outside the cap)` when the count exceeds the hard cap.
 - **Run button** — POSTs the run, surfaces a `cardsCreated created · scanned scanned · skipped skipped` toast, with `(capped — N extra not analyzed)` or `· N failed` annotations as needed. Console-logs the full server response for DevTools inspection (PHASE2 §15 tracks cleanup).

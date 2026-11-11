@@ -9,8 +9,8 @@ import {
   organization,
   admin,
   emailOTP,
-  oAuthProxy,
 } from "better-auth/plugins"
+import { otpSignInGate, withFallbackName } from "@/lib/auth-otp-gate"
 import { apiKey } from "@better-auth/api-key"
 import { nextCookies } from "better-auth/next-js"
 import { getActiveOrganization } from "@/server/organizations"
@@ -75,32 +75,14 @@ export const auth = betterAuth({
       },
     },
   },
-  socialProviders: {
-    github: {
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      // redirectURI: "https://xxx/api/auth/callback/github",
-    },
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      // redirectURI: "https://xxx/api/auth/callback/google",
-    },
-  },
-  emailAndPassword: {
-    enabled: true,
-    async sendResetPassword({ user, url }) {
-      await sendEmails({
-        to: user.email,
-        subject: "Сброс пароля",
-        body: `Перейдите по этой ссылке, чтобы сбросить пароль: ${url}`,
-      })
-    },
-    // requireEmailVerification: true, // if user can access the app without email verified
-  },
+  // Sign-in and sign-up are passwordless: email + a one-time code (emailOTP
+  // plugin below). Google / GitHub OAuth and email + password were removed.
+  // Existing users with a password or an OAuth account sign in with a code
+  // sent to the same email.
   emailVerification: {
-    sendOnSignUp: true,
     autoSignInAfterVerification: true,
+    // Used by the profile page («Отправить письмо для подтверждения») after an
+    // admin changes a user's email.
     async sendVerificationEmail({ user, url }) {
       await sendEmails({
         to: user.email,
@@ -109,9 +91,16 @@ export const auth = betterAuth({
       })
     },
   },
+  hooks: {
+    // Sign-in screen: no code for unknown emails (see auth-otp-gate.ts).
+    before: otpSignInGate,
+  },
   databaseHooks: {
     user: {
       create: {
+        // A code sign-in for a new email creates the user; the sign-up
+        // screens always send a name, this is only the fallback.
+        before: async (user) => ({ data: withFallbackName(user) }),
         after: async (user) => {
           // Skip default-org creation when the user is signing up in response
           // to an invitation — they'll join the inviter's org via
@@ -192,7 +181,10 @@ export const auth = betterAuth({
     lastLoginMethod(),
     nextCookies(),
     emailOTP({
-      disableSignUp: true,
+      // Sign-up is on: the first code sign-in of a new email creates the
+      // user (name from the sign-up form). The `hooks.before` gate above keeps
+      // the sign-in screen from sending codes to unknown emails.
+      disableSignUp: false,
       async sendVerificationOTP({ email, otp, type }) {
         const subjectMap = {
           "sign-in": "Ваш код для входа",
@@ -242,12 +234,5 @@ export const auth = betterAuth({
       adminUserIds: ["f4c577O0wsUOkzxTAUeRAHfKNlvLyQeZ"],
     }),
     apiKey(),
-    oAuthProxy({
-      productionURL:
-        process.env.NEXT_PUBLIC_PRODUCTION_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "https://salesdaily-demo.vercel.app",
-      currentURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-    }),
   ],
 })

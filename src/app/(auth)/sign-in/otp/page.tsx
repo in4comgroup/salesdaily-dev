@@ -1,17 +1,12 @@
-import type { Metadata } from "next"
-import { Suspense } from "react"
-import { SignInOtpForm } from "@/components/forms/form-sign-in-otp"
+import { redirect } from "next/navigation"
 
-export const metadata: Metadata = {
-  title: "Вход по коду",
-}
-
-export default function SignInOtp() {
-  return (
-    <main className="flex min-h-svh items-center justify-center px-4">
-      <Suspense fallback={null}>
-        <SignInOtpForm />
-      </Suspense>
-    </main>
-  )
+// Old address of the code sign-in. Sign-in is now code-only at /sign-in.
+export default async function SignInOtp({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const next = typeof params.redirect === "string" ? params.redirect : undefined
+  redirect(next ? `/sign-in?redirect=${encodeURIComponent(next)}` : "/sign-in")
 }

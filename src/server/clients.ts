@@ -700,7 +700,7 @@ export async function setClientResponsible(
 
 // External web search + extraction. Gemini 3.1 Flash Lite runs
 // `google_search` grounding alongside function tools and is cheaper than
-// 2.5 Flash; see src/lib/llm-models.ts.
+// 2.5 Flash.
 
 // ── Direct homepage fetch (precision booster for the extract pass) ────
 //

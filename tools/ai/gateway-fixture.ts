@@ -1,4 +1,9 @@
-{
+// Test-only fixture: a policy-complete AI configuration that routes through
+// the explicit Vercel Gateway adapter. It was config/ai/legacy.json; that file
+// is no longer a deployable profile. Policy, schema and Gateway-adapter tests
+// in runtime.test.ts use it. Every call returns a fresh, mutable copy.
+
+const GATEWAY_FIXTURE = {
   "version": 1,
   "policy": {
     "allowedConnections": [
@@ -215,4 +220,9 @@
       "fallbackModels": []
     }
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tests mutate unknown keys on purpose
+export function gatewayFixture(): any {
+  return structuredClone(GATEWAY_FIXTURE)
 }

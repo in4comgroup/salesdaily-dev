@@ -1,6 +1,6 @@
 # Архитектура AI-подсистемы и карта кода
 
-Состояние кода на 9 ноября 2026 года. Документ описывает реализацию после этапов 1–3 миграции; для понимания не требуется история Git. Наличие реализации не означает прохождение реальной приёмки или включение в production. Фактические проверки и отключения ведутся в [roadmap.md](roadmap.md).
+Состояние кода на 9 ноября 2026 года; учёт использования и цены моделей добавлены 11 ноября 2026 года — см. [metering-and-billing.md](metering-and-billing.md). Документ описывает реализацию после этапов 1–3 миграции; для понимания не требуется история Git. Наличие реализации не означает прохождение реальной приёмки или включение в production. Фактические проверки и отключения ведутся в [roadmap.md](roadmap.md).
 
 ## С чего начать чтение
 
@@ -10,6 +10,8 @@
 4. [policy.ts](../../src/server/ai/policy.ts) и [registry.ts](../../src/server/ai/registry.ts) — запреты и обязательные возможности моделей.
 5. [adapters/yandex.ts](../../src/server/ai/adapters/yandex.ts) и [services.ts](../../src/server/ai/services.ts) — реальные сетевые обращения.
 6. Найти свою функцию в таблице «Точки входа приложения» ниже и проследовать к её обработчику.
+7. [metering-and-billing.md](metering-and-billing.md) — учёт каждого вызова модели в `llm_usage`, дневной лимит расходов, реестр цен `llm_model_price` и ежедневная синхронизация цен с Yandex Billing API.
+8. [config-in-db-spec.md](config-in-db-spec.md) — согласованная спецификация: только Yandex, конфигурация маршрутов в БД вместо JSON (к реализации).
 
 Основной серверный код находится в `src/server/ai/`. Прикладные промпты, схемы ответа и бизнес-логика остаются в вызывающих обработчиках и парсерах. AI runtime управляет доступностью и маршрутом, а не заменяет бизнес-логику, авторизацию пользователя или изоляцию организаций.
 
@@ -26,6 +28,7 @@ flowchart TD
     Adapter --> Legacy["Vercel Gateway: только разрешённый legacy-профиль"]
     Runtime --> Service["service: ocr / speech / search"]
     Service --> HTTP["Фиксированные REST-операции Yandex"]
+    Adapter --> Meter["meterModel: дневной лимит + запись в llm_usage (БД)"]
     Runtime --> Catalog["Безопасный каталог моделей и features"]
     Catalog --> UI["Выбор моделей и доступность UI"]
 ```
@@ -62,7 +65,7 @@ flowchart TD
 Профили:
 
 - [yandex.json](../../config/ai/yandex.json): один исходный региональный профиль, новые функции по умолчанию выключены, текстовые включены.
-- [legacy.json](../../config/ai/legacy.json): сохранённые Gemini/GPT/Claude через явный Gateway; используется только там, где разрешена такая политика.
+- `legacy.json` удалён 11 ноября 2026 года. Gemini/GPT/Claude через явный Gateway остались только как фикстура тестов [gateway-fixture.ts](../../tools/ai/gateway-fixture.ts); адаптер `vercel-gateway` в коде сохранён.
 - [blocked.json](../../config/ai/blocked.json): AI выключен, AI-ключи не требуются.
 
 Наследования и объединения JSON нет. Прежний экспериментальный `yandex-media.json` больше не используется.
@@ -157,7 +160,7 @@ Worklet должен поставляться вместе с `public/` и бы�
 - [explore-sources-dialog.tsx](../../src/components/blocks/explore-sources-dialog.tsx), [magic-cards-button.tsx](../../src/components/blocks/magic-cards-button.tsx) — генерация карточек;
 - [discover-deals-dialog.tsx](../../src/components/blocks/discover-deals-dialog.tsx), [magic-deals-button.tsx](../../src/components/blocks/magic-deals-button.tsx) — поиск сделок.
 
-Сервер повторно проверяет выбор независимо от UI. Файлы в глобальном Yandex-чате пока запрещены, в том числе в истории сообщений; рабочие парсеры файлов Sources не означают поддержку вложений чата. Проверка сообщений — `assertChatContentAllowed` из `policy.ts`; Yandex-адаптер дополнительно проверяет файловые части модельного входа. [llm-models.ts](../../src/lib/llm-models.ts) — устаревший справочник, не источник активной маршрутизации.
+Сервер повторно проверяет выбор независимо от UI. Файлы в глобальном Yandex-чате пока запрещены, в том числе в истории сообщений; рабочие парсеры файлов Sources не означают поддержку вложений чата. Проверка сообщений — `assertChatContentAllowed` из `policy.ts`; Yandex-адаптер дополнительно проверяет файловые части модельного входа. Старый справочник `llm-models.ts` удалён 11 ноября 2026 года.
 
 ## Точки входа приложения
 
