@@ -9,6 +9,8 @@ import { TableAdminOrgs } from "@/components/tables/table-admin-orgs"
 import { TableAdminSources } from "@/components/tables/table-admin-sources"
 import { TableAdminTemplates } from "@/components/tables/table-admin-templates"
 import { AdminTeardown } from "@/components/blocks/admin-teardown"
+import { AdminLlmModels } from "@/components/blocks/admin-llm-models"
+import { UsageStats } from "@/components/blocks/admin-llm-models/usage-stats"
 import { PageLoader } from "@/components/blocks/page-loader"
 import { PageHeaderActions } from "@/components/blocks/page-header-actions"
 
@@ -48,6 +50,8 @@ export default function SettingsPage() {
             <TabsTrigger value="templates">Шаблоны</TabsTrigger>
             <TabsTrigger value="sources">Источники</TabsTrigger>
             <TabsTrigger value="teardown">Сброс источника</TabsTrigger>
+            <TabsTrigger value="usage">Использование</TabsTrigger>
+            <TabsTrigger value="models">Модели</TabsTrigger>
             <TabsTrigger value="settings">Настройки</TabsTrigger>
           </TabsList>
 
@@ -107,6 +111,30 @@ export default function SettingsPage() {
             <Card>
               <CardContent className="pt-6">
                 <AdminTeardown />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent
+            value="usage"
+            forceMount
+            className="mt-4 data-[state=inactive]:hidden"
+          >
+            <Card>
+              <CardContent className="pt-6">
+                <UsageStats />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent
+            value="models"
+            forceMount
+            className="mt-4 data-[state=inactive]:hidden"
+          >
+            <Card>
+              <CardContent className="pt-6">
+                <AdminLlmModels />
               </CardContent>
             </Card>
           </TabsContent>

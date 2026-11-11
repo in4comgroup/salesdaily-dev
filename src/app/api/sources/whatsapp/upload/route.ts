@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm"
 import { db } from "@/db/drizzle"
 import { source, sourceItem } from "@/db/schema"
 import { getServerSession } from "@/lib/get-session"
+import { withAiUsageContext } from "@/server/ai"
 import {
   parseChatTxt,
   renderGroupTranscript,
@@ -296,17 +297,19 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const parsed = await parseDropoffFile({
-        bytes,
-        fileName,
-        mediaType: file.type || "application/octet-stream",
-        // dropoffId is just an identifier inside the dropoff parser's
-        // markdown frontmatter; reuse the content hash so it's stable.
-        dropoffId: hash,
-        description: "",
-        userName,
-        uploadedAt: now.toISOString(),
-      })
+      const parsed = await withAiUsageContext({ organizationId: activeOrgId }, () =>
+        parseDropoffFile({
+          bytes,
+          fileName,
+          mediaType: file.type || "application/octet-stream",
+          // dropoffId is just an identifier inside the dropoff parser's
+          // markdown frontmatter; reuse the content hash so it's stable.
+          dropoffId: hash,
+          description: "",
+          userName,
+          uploadedAt: now.toISOString(),
+        }),
+      )
 
       const rootId = randomUUID()
       const firstBlock = parsed.blocks[0]

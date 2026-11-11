@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "No active organization" }, { status: 403 })
     }
 
-    const aiRoute = getAiRuntime().resolve({ task: "analytics" })
+    const aiRoute = getAiRuntime().resolve({ task: "analytics", organizationId })
     assertChatContentAllowed(messages, aiRoute.adapter)
 
     // Default window = the org's real data span, so «за период» means something

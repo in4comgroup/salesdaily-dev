@@ -7,7 +7,7 @@ import { z } from "zod"
 import { db } from "@/db/drizzle"
 import { sourceItem } from "@/db/schema"
 import { getOrCreateAiChatSource } from "@/server/sources"
-import { getAiRuntime } from "@/server/ai"
+import { getAiRuntime, withAiUsageContext } from "@/server/ai"
 import {
   assembleMarkdown,
   buildFrontmatter,
@@ -145,13 +145,13 @@ const analysisSchema = z.object({
 })
 
 
-async function extractAnalysis(transcript: string): Promise<MetadataAnalysis> {
+async function extractAnalysis(transcript: string, organizationId: string): Promise<MetadataAnalysis> {
   const truncated =
     transcript.length > 60_000
       ? `${transcript.slice(0, 60_000)}\n\n[...truncated, ${transcript.length - 60_000} additional characters omitted]`
       : transcript
 
-  const aiRoute = getAiRuntime().resolve({ task: "chatSummary" })
+  const aiRoute = getAiRuntime().resolve({ task: "chatSummary", organizationId })
   const { output } = await generateText({
     model: aiRoute.model,
     output: Output.object({ schema: analysisSchema }),
@@ -184,6 +184,13 @@ async function extractAnalysis(transcript: string): Promise<MetadataAnalysis> {
 export async function saveChatSession(
   input: SaveChatSessionInput,
 ): Promise<SaveChatSessionResult> {
+  // Attachment parsing + the summary are metered against the org.
+  return withAiUsageContext({ organizationId: input.organizationId }, () => saveChatSessionInOrg(input))
+}
+
+async function saveChatSessionInOrg(
+  input: SaveChatSessionInput,
+): Promise<SaveChatSessionResult> {
   if (input.messages.length === 0) {
     throw new Error("No messages to save")
   }
@@ -200,7 +207,7 @@ export async function saveChatSession(
   // LLM-derived analysis. Failure here is fatal — without analysis the
   // metadata_json + frontmatter would be misleading. Caller surfaces
   // the error to the user via toast.
-  const analysis = await extractAnalysis(conversation)
+  const analysis = await extractAnalysis(conversation, input.organizationId)
 
   // Stable namespaced id used both as `source_item.external_id` and as
   // the YAML frontmatter `source_id`. Each save is a new row (Q1=A).

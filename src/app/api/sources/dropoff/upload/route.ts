@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm"
 import { db } from "@/db/drizzle"
 import { source, sourceItem } from "@/db/schema"
 import { getServerSession } from "@/lib/get-session"
+import { withAiUsageContext } from "@/server/ai"
 import {
   parseDropoffFile,
   UnsupportedDropoffTypeError,
@@ -87,15 +88,17 @@ export async function POST(request: NextRequest) {
     const dropoffId = randomUUID()
     try {
       const buffer = new Uint8Array(await file.arrayBuffer())
-      const parsed = await parseDropoffFile({
-        bytes: buffer,
-        fileName,
-        mediaType: file.type || "application/octet-stream",
-        dropoffId,
-        description,
-        userName,
-        uploadedAt: new Date().toISOString(),
-      })
+      const parsed = await withAiUsageContext({ organizationId: activeOrgId }, () =>
+        parseDropoffFile({
+          bytes: buffer,
+          fileName,
+          mediaType: file.type || "application/octet-stream",
+          dropoffId,
+          description,
+          userName,
+          uploadedAt: new Date().toISOString(),
+        }),
+      )
 
       const now = new Date()
       const rootId = randomUUID()

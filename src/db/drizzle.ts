@@ -12,6 +12,7 @@ import { schema } from './schema';
 // keep `replicas × max` under the managed instance's connection limit.
 const globalForDb = globalThis as unknown as { pgPool?: Pool };
 
+const isNewPool = !globalForDb.pgPool;
 const pool =
   globalForDb.pgPool ??
   new Pool({
@@ -24,12 +25,16 @@ const pool =
     keepAlive: true,
   });
 
-if (process.env.NODE_ENV !== 'production') globalForDb.pgPool = pool;
+// Cached in every environment: Next.js may load this module in more than one
+// bundle (instrumentation + routes); one process must still use one pool.
+globalForDb.pgPool = pool;
 
 // A dropped idle connection must not crash the process — the pool just
 // discards it and opens a new one on the next query.
-pool.on('error', (err) => {
-  console.error('[db] idle client error:', err.message);
-});
+if (isNewPool) {
+  pool.on('error', (err) => {
+    console.error('[db] idle client error:', err.message);
+  });
+}
 
 export const db = drizzle(pool, { schema });

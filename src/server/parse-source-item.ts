@@ -65,6 +65,7 @@ import {
   UnsupportedOfficeTypeError,
 } from "@/server/parsers/office"
 import { getHandler } from "@/server/providers/handlers"
+import { AiBudgetError, withAiUsageContext } from "@/server/ai"
 // These two are also called directly from provider-specific attachment
 // download helpers below (Nylas attachment fetch, Chat attachment fetch)
 // — those branches are already inside provider-conditional code paths,
@@ -205,7 +206,15 @@ type ParseContext = {
 
 export async function parseSourceItem(itemId: string): Promise<ParseResult> {
   const ctx = await loadParseContext(itemId)
+  // Every LLM call of this parse (text, media, attachments, org attribution)
+  // is metered against the item's org and its daily cost cap.
+  return withAiUsageContext(
+    { organizationId: ctx.organizationId, sourceItemId: itemId },
+    () => parseLoadedSourceItem(ctx, itemId),
+  )
+}
 
+async function parseLoadedSourceItem(ctx: ParseContext, itemId: string): Promise<ParseResult> {
   // Mark in-flight so the table shows "Parsing…" even if the user reloads.
   await db
     .update(sourceItem)
@@ -256,7 +265,12 @@ export async function parseSourceItem(itemId: string): Promise<ParseResult> {
     //   • Anything else: failed, with the raw error message.
     let status: ParseStatus
     let reason: string
-    if (err instanceof EmailFilteredError) {
+    if (err instanceof AiBudgetError) {
+      // The org's daily LLM cap is reached: keep the item in the queue so
+      // the next run (next day) parses it, instead of failing it for good.
+      status = "pending"
+      reason = "deferred: daily LLM cost cap reached"
+    } else if (err instanceof EmailFilteredError) {
       status = "skipped"
       reason = `filtered: ${err.category} — ${err.classifierReason}`
     } else if (getHandler(ctx.provider).isItemMissing?.(err) ?? false) {
@@ -272,7 +286,7 @@ export async function parseSourceItem(itemId: string): Promise<ParseResult> {
       .set({
         parseStatus: status,
         parseError: reason,
-        parsedAt: new Date(),
+        parsedAt: status === "pending" ? null : new Date(),
       })
       .where(eq(sourceItem.id, itemId))
     return {

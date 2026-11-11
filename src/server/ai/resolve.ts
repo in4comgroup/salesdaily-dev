@@ -12,6 +12,7 @@ import { createYandexAdapter } from "./adapters/yandex"
 import { createYandexService, type ServiceName, type YandexService } from "./services"
 import { AiPolicyError } from "./policy"
 import type { AiDiagnostics } from "./diagnostics"
+import { meterModel } from "./usage"
 
 export function createAiRuntime(
   input: unknown,
@@ -85,16 +86,30 @@ export function createAiRuntime(
       if (route.connection.adapter !== "vercel-gateway" || !upstreamId.startsWith("google/")) {
         throw new AiConfigurationError("Google Search requires an explicitly approved Google Gateway route")
       }
-      return adapters.get(route.definition.connectionId)!(upstreamId)
+      return meterModel(adapters.get(route.definition.connectionId)!(upstreamId),
+        { task, modelId: route.modelId, upstreamModelId: upstreamId })
     },
-    resolve(request: { task: AiTask; modelId?: string; requiredCapabilities?: readonly AiCapability[] }) {
+    // `organizationId` / `sourceItemId` attribute the call in `llm_usage` and
+    // apply the org's daily cost cap. When omitted they come from
+    // `withAiUsageContext()` (see ./usage.ts).
+    resolve(request: {
+      task: AiTask
+      modelId?: string
+      requiredCapabilities?: readonly AiCapability[]
+      organizationId?: string | null
+      sourceItemId?: string | null
+    }) {
       const route = authorizeAiModel(config, request.task, request.modelId, [
         ...requiredTaskCapabilities(request.task, config), ...(request.requiredCapabilities ?? []),
       ])
       const adapter = adapters.get(route.definition.connectionId)
       if (!adapter) throw new AiConfigurationError("AI adapter is unavailable")
       const upstreamModelId = modelIds.get(route.modelId)!
-      const model: Exclude<LanguageModel, string> = adapter(upstreamModelId, route.definition.capabilities.includes("image"))
+      const model: Exclude<LanguageModel, string> = meterModel(
+        adapter(upstreamModelId, route.definition.capabilities.includes("image")),
+        { task: request.task, modelId: route.modelId, upstreamModelId },
+        { organizationId: request.organizationId, sourceItemId: request.sourceItemId },
+      )
       return {
         model,
         task: request.task,

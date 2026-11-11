@@ -2179,3 +2179,88 @@ export const schema = {
   cardUser,
   cardContact,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLM usage metering + per-org settings (Topics phase 0, migration 0003).
+// See docs/specs/topics/01-specification.md §13 and 03-development-plan.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Topics engine switch per org: `off` = nothing runs, `shadow` = the engine
+// writes data invisible to users, `on` = users see topics.
+export const topicsMode = pgEnum("topics_mode", ["off", "shadow", "on"])
+export type TopicsMode = (typeof topicsMode.enumValues)[number]
+
+// One row per org (created lazily). Absent row = defaults.
+export const organizationSettings = pgTable("organization_settings", {
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  topicsMode: topicsMode("topics_mode").default("off").notNull(),
+  // Daily LLM cost cap in RUB. NULL = the platform default
+  // (`platform_setting` key `llm.dailyCapRub`, else 500).
+  llmDailyCapRub: numeric("llm_daily_cap_rub", { precision: 12, scale: 2 }),
+  // Per-org system actor («Агент Truffalo») for automatic writes (Q14).
+  // A plain `user` row without a `member` row, so it never shows in member
+  // lists and cannot sign in (banned, no account).
+  systemUserId: text("system_user_id").references(() => user.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+})
+
+// Platform-wide key/value settings (platform admin).
+export const platformSetting = pgTable("platform_setting", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+})
+
+// Price per 1 000 tokens in RUB. `model` = the upstream model name without the
+// Yandex folder (`yandexgpt/latest`) or the Gateway id (`google/gemini-…`).
+// The row with the latest `valid_from <= call time` applies.
+export const llmModelPrice = pgTable(
+  "llm_model_price",
+  {
+    id: text("id").primaryKey(),
+    model: text("model").notNull(),
+    inputRubPer1k: numeric("input_rub_per_1k", { precision: 12, scale: 6 }).notNull(),
+    outputRubPer1k: numeric("output_rub_per_1k", { precision: 12, scale: 6 }).notNull(),
+    validFrom: timestamp("valid_from", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [uniqueIndex("llm_model_price_model_valid_from_uidx").on(table.model, table.validFrom)]
+)
+
+// One row per model call (or per call refused by the daily cap). Written by
+// the metering middleware in src/server/ai/usage.ts. No prompt or output text.
+export const llmUsage = pgTable(
+  "llm_usage",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "set null",
+    }),
+    task: text("task").notNull(),
+    // Model id from AI_CONFIG_PATH (`yandex-text`) + normalised upstream name.
+    modelId: text("model_id").notNull(),
+    model: text("model").notNull(),
+    operation: text("operation").notNull(), // generate | stream
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costRub: numeric("cost_rub", { precision: 14, scale: 6 }),
+    latencyMs: integer("latency_ms").notNull(),
+    ok: boolean("ok").notNull(),
+    // NULL when ok. `budget_exceeded` = refused by the daily cap.
+    errorClass: text("error_class"),
+    // No FK: source items are hard-deleted by teardown; usage history stays.
+    sourceItemId: text("source_item_id"),
+  },
+  (table) => [
+    index("llm_usage_org_created_idx").on(table.organizationId, table.createdAt),
+    index("llm_usage_created_idx").on(table.createdAt),
+  ]
+)
