@@ -2264,3 +2264,24 @@ export const llmUsage = pgTable(
     index("llm_usage_created_idx").on(table.createdAt),
   ]
 )
+
+// AI routing configuration (docs/ai/config-in-db-spec.md). One row = one saved
+// version of the configuration document (schema version 2: features, files,
+// services, models, tasks; no secrets). Exactly one row is active (partial
+// unique index). Rows are never edited except the `is_active` flag, and the
+// active row cannot be deleted (triggers in 0004_ai_config_version.sql).
+// Read only by src/server/ai-config-store.ts.
+export const aiConfigVersion = pgTable(
+  "ai_config_version",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    config: jsonb("config").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    isActive: boolean("is_active").default(false).notNull(),
+  },
+  (table) => [
+    uniqueIndex("ai_config_version_one_active_uidx").on(table.isActive).where(sql`"is_active"`),
+  ]
+)

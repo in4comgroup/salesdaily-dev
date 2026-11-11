@@ -2,5 +2,6 @@
   "../baseline/0000_baseline.sql",
   "../baseline/0001_deal_funnel_stage_settings.sql",
   "0002_client_responsible_user.sql",
-  "0003_llm_usage_org_settings.sql"
+  "0003_llm_usage_org_settings.sql",
+  "0004_ai_config_version.sql"
 ]

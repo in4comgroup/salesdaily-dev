@@ -1,7 +1,9 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs" && process.env.NEXT_PHASE !== "phase-production-build") {
-    const { getAiRuntime } = await import("./server/ai")
-    getAiRuntime()
+    // AI configuration: the active database version (ai_config_version),
+    // else the AI_CONFIG_PATH file, else AI off. Never stops the app.
+    const { startAiConfigStore } = await import("./server/ai-config-store")
+    await startAiConfigStore()
     // LLM usage metering + daily cost cap (src/server/llm-usage.ts).
     const { registerLlmUsageSink } = await import("./server/llm-usage")
     registerLlmUsageSink()

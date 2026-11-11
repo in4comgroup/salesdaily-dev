@@ -72,6 +72,11 @@ export function createAiRuntime(
       return service
     },
     files() { return { ...config.files } },
+    // The validated configuration document (no secrets) — the admin editor
+    // starts from it when there is no database version yet.
+    document() { return structuredClone(config) },
+    // Upstream URIs of the enabled models (price sync uses them; no secrets).
+    modelUris() { return [...modelUris.values()] },
     listModels(task: AiTask) { return listAvailableAiModels(config, task) },
     assertFeatureAllowed(feature: AiFeature) { assertAiFeatureAllowed(config, feature) },
     isFeatureAllowed(feature: AiFeature) { return config.features[feature] === true },
@@ -108,9 +113,25 @@ export function createAiRuntime(
   }
 }
 
-let runtime: ReturnType<typeof createAiRuntime> | undefined
+export type AiRuntime = ReturnType<typeof createAiRuntime>
 
-// Process-scoped configuration: restart after changing the mounted JSON/env.
-export function getAiRuntime() {
-  return runtime ??= createAiRuntime(loadAiConfig())
+// The current runtime is kept on globalThis: Next.js can load this module in
+// more than one bundle (instrumentation + routes), and all of them must see
+// the same configuration. In the app, src/server/ai-config-store.ts sets it at
+// startup and replaces it when the active database version changes. Without
+// the store (CLI tools, tests) it is built once from the AI_CONFIG_PATH file.
+const RUNTIME_KEY = Symbol.for("crm.ai.runtime")
+type RuntimeHolder = { runtime?: AiRuntime }
+function holder(): RuntimeHolder {
+  const g = globalThis as unknown as Record<symbol, RuntimeHolder | undefined>
+  return (g[RUNTIME_KEY] ??= {})
+}
+
+export function setAiRuntime(next: AiRuntime) {
+  holder().runtime = next
+}
+
+export function getAiRuntime(): AiRuntime {
+  const h = holder()
+  return h.runtime ??= createAiRuntime(loadAiConfig())
 }

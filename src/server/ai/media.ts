@@ -1,12 +1,12 @@
 import "server-only"
 
 import { generateText, type UserContent } from "ai"
-import { getAiRuntime, type createAiRuntime } from "./resolve"
+import { getAiRuntime, type AiRuntime } from "./resolve"
 import { AiPolicyError } from "./policy"
 import { AiMediaError } from "./errors"
 import { recognizePdf } from "./ocr"
 
-export type AiRuntime = ReturnType<typeof createAiRuntime>
+export type { AiRuntime }
 export function inlineImageType(bytes: Uint8Array): "image/png" | "image/jpeg" {
   if (bytes.byteLength === 0 || bytes.byteLength > 10 * 1024 * 1024) {
     throw new AiPolicyError("Inline image must contain between 1 byte and 10 MiB")

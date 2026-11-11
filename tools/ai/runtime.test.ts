@@ -21,6 +21,8 @@ import { z } from "zod"
 import { AiConfigurationError, loadAiConfig, parseAiConfig } from "../../src/server/ai/config"
 import { AiPolicyError, assertChatContentAllowed } from "../../src/server/ai/policy"
 import { createAiRuntime } from "../../src/server/ai/resolve"
+import { createAiConfigStore, type AiConfigSource } from "../../src/server/ai/config-store"
+import { prepareSeedDocument } from "./seed"
 import { AiProviderError, AiProbeError, AiMediaError, formatAiCheckError } from "../../src/server/ai/errors"
 import { redactDiagnosticBody, type AiDiagnosticEvent } from "../../src/server/ai/diagnostics"
 import {
@@ -1036,4 +1038,126 @@ test("billing: client exchanges a JWT once, sends the IAM token and pages throug
   const denied = createYandexBillingClient({ key: parseServiceAccountKey(json), billingAccountId: "dn2abcdefghij0123456" },
     (async () => new Response(JSON.stringify({ message: "invalid authorization metadata" }), { status: 401 })) as typeof fetch)
   await assert.rejects(denied.listSkus(), /IAM token exchange failed: HTTP 401: invalid authorization metadata/)
+})
+
+
+// ── AI configuration store (docs/ai/config-in-db-spec.md, stage 2) ─────────
+
+function storeHarness(options: { file?: unknown | null; rows?: { id: number; config: unknown } | null; failRead?: boolean }) {
+  let row = options.rows ?? null
+  let failRead = options.failRead ?? false
+  let reads = 0
+  const source: AiConfigSource = {
+    async readActiveId() { if (failRead) throw new Error("db down"); return row ? row.id : null },
+    async readActive() { reads++; if (failRead) throw new Error("db down"); return row },
+  }
+  let current: ReturnType<typeof createAiRuntime> | undefined
+  const store = createAiConfigStore({
+    source, env: yandexEnv,
+    readFile: () => (options.file === undefined ? null : options.file),
+    apply: (runtime) => { current = runtime },
+    log: () => {},
+  })
+  return {
+    store,
+    chatModels: () => current!.listModels("chat").map((m) => m.id),
+    setRow: (next: { id: number; config: unknown } | null) => { row = next },
+    setFailRead: (value: boolean) => { failRead = value },
+    reads: () => reads,
+  }
+}
+
+test("config store: active database version wins over the file", async () => {
+  const h = storeHarness({ file: yandex(), rows: { id: 7, config: selectable() } })
+  await h.store.load()
+  assert.deepEqual(h.chatModels(), ["yandex-text", "yandex-lite"])
+  assert.equal(h.store.state().source, "database")
+  assert.equal(h.store.state().versionId, 7)
+})
+
+test("config store: no active version or database down at start → file, else everything off", async () => {
+  const noRow = storeHarness({ file: yandex(), rows: null })
+  await noRow.store.load()
+  assert.equal(noRow.store.state().source, "file")
+  assert.deepEqual(noRow.chatModels(), ["yandex-text"])
+
+  const down = storeHarness({ file: yandex(), failRead: true })
+  await down.store.load()
+  assert.equal(down.store.state().source, "file")
+  assert.match(down.store.state().lastError ?? "", /database read failed/)
+
+  const nothing = storeHarness({ rows: null })
+  await nothing.store.load()
+  assert.equal(nothing.store.state().source, "disabled")
+  assert.deepEqual(nothing.chatModels(), [])
+})
+
+test("config store: invalid version at start turns AI off and never uses the stale file", async () => {
+  const broken = selectable()
+  broken.models["yandex-lite"].uri = "gpt://other-folder/model"
+  const h = storeHarness({ file: yandex(), rows: { id: 3, config: broken } })
+  await h.store.load()
+  assert.equal(h.store.state().source, "disabled")
+  assert.deepEqual(h.chatModels(), [])
+  assert.match(h.store.state().lastError ?? "", /version 3 is invalid/)
+})
+
+test("config store: new version swaps the runtime; broken or unreadable updates keep the last working one", async () => {
+  const h = storeHarness({ file: yandex(), rows: null })
+  await h.store.load()
+  assert.equal(h.store.state().source, "file")
+
+  h.setRow({ id: 1, config: yandex() })
+  await h.store.check()
+  assert.equal(h.store.state().versionId, 1)
+
+  h.setRow({ id: 2, config: selectable() })
+  await h.store.check()
+  assert.deepEqual(h.chatModels(), ["yandex-text", "yandex-lite"])
+
+  const broken = selectable()
+  broken.tasks.parsePdf.enabled = true // needs the OCR service
+  h.setRow({ id: 3, config: broken })
+  await h.store.check()
+  assert.equal(h.store.state().versionId, 2)
+  assert.deepEqual(h.chatModels(), ["yandex-text", "yandex-lite"])
+  const readsAfterFailure = h.reads()
+  await h.store.check()
+  assert.equal(h.reads(), readsAfterFailure) // a failed version is not rebuilt
+
+  h.setFailRead(true)
+  await h.store.check()
+  assert.equal(h.store.state().versionId, 2)
+  assert.match(h.store.state().lastError ?? "", /database check failed/)
+
+  h.setFailRead(false)
+  h.setRow({ id: 2, config: selectable() })
+  await h.store.check()
+  assert.equal(h.store.state().versionId, 2)
+})
+
+test("seed: copies missing model URIs from env, keeps document URIs and checks env without network", () => {
+  const { config, filledUris } = prepareSeedDocument(selectable(), yandexEnv)
+  assert.equal(config.models["yandex-text"].uri, yandexEnv.YANDEX_AI_TEXT_MODEL_URI)
+  assert.equal(config.models["yandex-lite"].uri, "gpt://test-folder/yandexgpt-lite")
+  assert.equal(config.models["yandex-vision"].uri, undefined) // disabled, no env value
+  assert.deepEqual(filledUris, ["yandex-text"])
+  assert.throws(() => prepareSeedDocument(yandex(), { ...yandexEnv, YANDEX_AI_TEXT_MODEL_URI: "" }), AiConfigurationError)
+  assert.throws(() => prepareSeedDocument(yandex(), { ...yandexEnv, YANDEX_AI_API_KEY: "" }), AiConfigurationError)
+  assert.throws(() => prepareSeedDocument({ version: 1 }, yandexEnv), AiConfigurationError)
+})
+
+test("configuration errors name the broken rule but never echo input values", () => {
+  const rule = yandex()
+  rule.tasks.parsePdf.enabled = true
+  rule.models["yandex-text"].label = "secret-label-value"
+  assert.throws(() => parseAiConfig(rule), (error: unknown) =>
+    error instanceof AiConfigurationError &&
+    /services\.ocr \(PDF parsing requires the OCR service\)/.test(error.message) &&
+    !error.message.includes("secret-label-value"))
+  // Unknown keys stop validation before the rules; the value is still not shown.
+  const unknown = yandex()
+  unknown.models["yandex-text"].apiKey = "do-not-print-this-secret"
+  assert.throws(() => parseAiConfig(unknown), (error: unknown) =>
+    error instanceof AiConfigurationError && !error.message.includes("do-not-print-this-secret"))
 })
