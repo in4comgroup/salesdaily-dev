@@ -320,7 +320,7 @@ export async function createAndParseOrderRequest(
       listProductFilterOptions(),
     ])
 
-    const aiRoute = getAiRuntime().resolve({ task: "orderRequest", modelId: input.modelKey })
+    const aiRoute = getAiRuntime().resolve({ task: "orderRequest", modelId: input.modelKey, organizationId: activeOrgId })
     const { output } = await generateText({
       model: aiRoute.model,
       // Deterministic split: the same client message must yield the same

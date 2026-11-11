@@ -97,6 +97,8 @@ export async function processSourceItem(
       const r = await parseSourceItem(itemId)
       if (r.parentStatus === "failed") {
         parseError = r.parentParseError ?? "Ошибка разбора"
+      } else if (r.parentStatus === "pending") {
+        parseError = "Дневной лимит расходов на ИИ исчерпан — сообщение будет разобрано позже"
       }
     } catch (err) {
       // parseSourceItem is contracted to return normally, but belt-and-

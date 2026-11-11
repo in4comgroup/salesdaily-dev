@@ -9,6 +9,12 @@ import { researchYandex, parseSearchXml } from "../../src/server/ai/search"
 import { AiServiceError, readBytesBounded } from "../../src/server/ai/services"
 import { prepareMediaInput, inlineImageType } from "../../src/server/ai/media"
 import { readFileSync } from "node:fs"
+import { constants as cryptoConstants, generateKeyPairSync, verify as verifySignature } from "node:crypto"
+import {
+  DEFAULT_SKU_MAP, SKU_ID, YANDEX_AI_STUDIO_SERVICE_ID, YandexBillingError, createIamJwt, createYandexBillingClient,
+  groupTextGenerationSkus, parseServiceAccountKey, planModelPriceRows, readYandexBillingCredentials, skuPricePoints,
+  unitFactorPer1k, type YandexSku,
+} from "../../src/server/ai/billing"
 import test from "node:test"
 import { generateText, streamText, Output, tool, stepCountIs } from "ai"
 import { z } from "zod"
@@ -17,6 +23,10 @@ import { AiPolicyError, assertChatContentAllowed } from "../../src/server/ai/pol
 import { createAiRuntime } from "../../src/server/ai/resolve"
 import { AiProviderError, AiProbeError, AiMediaError, formatAiCheckError } from "../../src/server/ai/errors"
 import { redactDiagnosticBody, type AiDiagnosticEvent } from "../../src/server/ai/diagnostics"
+import {
+  AiBudgetError, classifyAiError, normalizeUpstreamModel, registerAiUsageSink, withAiUsageContext,
+  type AiUsageEvent, type AiUsageSink,
+} from "../../src/server/ai/usage"
 
 function legacy() {
   return JSON.parse(readFileSync("config/ai/legacy.json", "utf8"))
@@ -768,4 +778,267 @@ test("audio worklet flushes its final partial buffer and mixes channels locally"
   assert.deepEqual(Array.from(new Float32Array(messages[0].buffer!)), [0.5, -0.5])
   assert.equal(messages[1].type, "stopped")
   assert.equal(processor.process([]), false)
+})
+
+// ── LLM usage metering + daily cap (src/server/ai/usage.ts) ───────────────
+function fakeSink(options: { refuse?: boolean } = {}) {
+  const events: AiUsageEvent[] = []
+  const checks: string[] = []
+  const sink: AiUsageSink = {
+    async assertWithinBudget(event) {
+      checks.push(`${event.organizationId}:${event.task}:${event.operation}`)
+      if (options.refuse && event.organizationId) throw new AiBudgetError()
+    },
+    async record(event) { events.push(event) },
+  }
+  return { sink, events, checks }
+}
+const flush = () => new Promise((resolve) => setImmediate(resolve))
+
+test("without a registered sink models are not metered", async () => {
+  registerAiUsageSink(undefined)
+  const fakeFetch: typeof fetch = async () => Response.json(completion("OK"))
+  const route = createAiRuntime(yandex(), yandexEnv, fakeFetch).resolve({ task: "chat", organizationId: "org-1" })
+  assert.equal((await generateText({ model: route.model, prompt: "synthetic", maxRetries: 0 })).text, "OK")
+})
+
+test("metering records org, item, task, folder-free model and tokens; never prompt text", async () => {
+  const { sink, events, checks } = fakeSink()
+  registerAiUsageSink(sink)
+  try {
+    const fakeFetch: typeof fetch = async () => Response.json({ ...completion("OK"),
+      usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } })
+    const runtime = createAiRuntime(yandex(), yandexEnv, fakeFetch)
+    // Context from withAiUsageContext; explicit organizationId wins.
+    const fromContext = withAiUsageContext({ organizationId: "org-ctx", sourceItemId: "item-1" },
+      () => runtime.resolve({ task: "cards" }))
+    const explicit = withAiUsageContext({ organizationId: "org-ctx" },
+      () => runtime.resolve({ task: "deals", organizationId: "org-explicit" }))
+    await generateText({ model: fromContext.model, prompt: "secret prompt", maxRetries: 0 })
+    await generateText({ model: explicit.model, prompt: "secret prompt", maxRetries: 0 })
+    await flush()
+    assert.deepEqual(checks, ["org-ctx:cards:generate", "org-explicit:deals:generate"])
+    assert.equal(events.length, 2)
+    assert.deepEqual({ ...events[0], latencyMs: 0 }, {
+      organizationId: "org-ctx", sourceItemId: "item-1", task: "cards", modelId: "yandex-text",
+      model: "yandexgpt-5.1", operation: "generate", inputTokens: 11, outputTokens: 7,
+      latencyMs: 0, ok: true, errorClass: null,
+    })
+    assert.equal(events[1].organizationId, "org-explicit")
+    assert.equal(events[1].sourceItemId, null)
+    assert.ok(!JSON.stringify(events).includes("secret prompt"))
+  } finally {
+    registerAiUsageSink(undefined)
+  }
+})
+
+test("daily cap refusal happens before any provider request", async () => {
+  const { sink } = fakeSink({ refuse: true })
+  registerAiUsageSink(sink)
+  try {
+    let calls = 0
+    const fakeFetch: typeof fetch = async () => { calls++; return Response.json(completion("OK")) }
+    const route = createAiRuntime(yandex(), yandexEnv, fakeFetch).resolve({ task: "chat", organizationId: "org-1" })
+    await assert.rejects(generateText({ model: route.model, prompt: "synthetic", maxRetries: 0 }), AiBudgetError)
+    assert.equal(calls, 0)
+    assert.ok(new AiBudgetError() instanceof AiPolicyError)
+  } finally {
+    registerAiUsageSink(undefined)
+  }
+})
+
+test("provider failures are recorded with a safe error class and rethrown", async () => {
+  const { sink, events } = fakeSink()
+  registerAiUsageSink(sink)
+  try {
+    const fakeFetch: typeof fetch = async () => new Response("{}", { status: 429 })
+    const route = createAiRuntime(yandex(), yandexEnv, fakeFetch).resolve({ task: "chat", organizationId: "org-1" })
+    await assert.rejects(generateText({ model: route.model, prompt: "synthetic", maxRetries: 0 }))
+    await flush()
+    assert.equal(events.length, 1)
+    assert.equal(events[0].ok, false)
+    assert.equal(events[0].errorClass, "http_429")
+    assert.equal(events[0].inputTokens, null)
+  } finally {
+    registerAiUsageSink(undefined)
+  }
+})
+
+test("streams are recorded once with final usage", async () => {
+  const { sink, events, checks } = fakeSink()
+  registerAiUsageSink(sink)
+  try {
+    const fakeFetch: typeof fetch = async () => {
+      const chunks = [
+        { id: "synthetic", created: 0, model: "test", choices: [{ index: 0, delta: { role: "assistant", content: "OK" }, finish_reason: null }] },
+        { choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 } },
+      ]
+      return new Response(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
+        headers: { "Content-Type": "text/event-stream" },
+      })
+    }
+    const route = createAiRuntime(yandex(), yandexEnv, fakeFetch).resolve({ task: "analytics", organizationId: "org-1" })
+    const result = streamText({ model: route.model, prompt: "synthetic", maxRetries: 0 })
+    assert.equal(await result.text, "OK")
+    await flush()
+    assert.deepEqual(checks, ["org-1:analytics:stream"])
+    assert.equal(events.length, 1)
+    assert.equal(events[0].operation, "stream")
+    assert.equal(events[0].ok, true)
+    assert.equal(events[0].inputTokens, 5)
+    assert.equal(events[0].outputTokens, 2)
+  } finally {
+    registerAiUsageSink(undefined)
+  }
+})
+
+test("model names drop the Yandex folder; error classes never carry free text", () => {
+  assert.equal(normalizeUpstreamModel("gpt://b1gfolder/yandexgpt/latest"), "yandexgpt/latest")
+  assert.equal(normalizeUpstreamModel("google/gemini-3.1-flash-lite"), "google/gemini-3.1-flash-lite")
+  assert.equal(classifyAiError(new AiBudgetError()), "budget_exceeded")
+  assert.equal(classifyAiError(new AiPolicyError("x")), "policy")
+  assert.equal(classifyAiError({ name: "AbortError" }), "aborted")
+  assert.equal(classifyAiError({ name: "contains spaces: secret" }), "unknown")
+})
+
+// ── Yandex Billing price sync (src/server/ai/billing.ts) ──────────────────
+function testSaKey() {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
+  const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString()
+  const json = JSON.stringify({
+    id: "ajekeyid000000000001", service_account_id: "ajesa000000000000001",
+    private_key: `PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <ajekeyid000000000001>\n${pem}`,
+  })
+  return { json, publicKey }
+}
+
+function sku(id: string, name: string, versions: { at: string; price: string; type?: string }[], unit = "1k*token"): YandexSku {
+  return {
+    id, name, pricingUnit: unit,
+    pricingVersions: versions.map((v) => ({
+      type: v.type ?? "STREET_PRICE", effectiveTime: v.at,
+      pricingExpressions: [{ rates: [{ startPricingQuantity: "0", unitPrice: v.price, currency: "RUB" }] }],
+    })),
+  }
+}
+
+test("billing: service account key is read raw or base64, never echoed in errors", () => {
+  const { json } = testSaKey()
+  const raw = parseServiceAccountKey(json)
+  const b64 = parseServiceAccountKey(Buffer.from(json).toString("base64"))
+  assert.equal(raw.id, "ajekeyid000000000001")
+  assert.equal(b64.serviceAccountId, "ajesa000000000000001")
+  assert.ok(raw.privateKey.startsWith("-----BEGIN PRIVATE KEY-----"))
+  assert.throws(() => parseServiceAccountKey("secret-not-json"), (e: Error) => e instanceof YandexBillingError && !e.message.includes("secret"))
+  assert.equal(readYandexBillingCredentials({}), null)
+  assert.throws(() => readYandexBillingCredentials({ YANDEX_BILLING_SA_KEY: json }), YandexBillingError)
+  assert.throws(() => readYandexBillingCredentials({ YANDEX_BILLING_SA_KEY: json, YANDEX_BILLING_ACCOUNT_ID: "bad id" }), YandexBillingError)
+  assert.equal(readYandexBillingCredentials({ YANDEX_BILLING_SA_KEY: json, YANDEX_BILLING_ACCOUNT_ID: "dn2abcdefghij0123456" })?.billingAccountId, "dn2abcdefghij0123456")
+})
+
+test("billing: IAM JWT is PS256 with the key id and a verifiable signature", () => {
+  const { json, publicKey } = testSaKey()
+  const key = parseServiceAccountKey(json)
+  const jwt = createIamJwt(key, 1_700_000_000)
+  const [head, body, sig] = jwt.split(".")
+  assert.deepEqual(JSON.parse(Buffer.from(head, "base64url").toString()), { typ: "JWT", alg: "PS256", kid: key.id })
+  const payload = JSON.parse(Buffer.from(body, "base64url").toString())
+  assert.equal(payload.iss, key.serviceAccountId)
+  assert.equal(payload.exp - payload.iat, 3600)
+  assert.equal(payload.aud, "https://iam.api.cloud.yandex.net/iam/v1/tokens")
+  assert.ok(verifySignature("sha256", Buffer.from(`${head}.${body}`), {
+    key: publicKey, padding: cryptoConstants.RSA_PKCS1_PSS_PADDING, saltLength: 32,
+  }, Buffer.from(sig, "base64url")))
+})
+
+test("billing: SKU prices convert units, prefer contract prices and use the base tier", () => {
+  assert.equal(unitFactorPer1k("1k*token"), 1)
+  assert.equal(unitFactorPer1k("token"), 1000)
+  assert.equal(unitFactorPer1k("1m*token"), 0.001)
+  assert.equal(unitFactorPer1k("request"), null)
+  const s = sku("a", "x", [
+    { at: "2026-01-01T00:00:00Z", price: "0.8" },
+    { at: "2026-02-01T00:00:00Z", price: "0.6", type: "CONTRACT_PRICE" },
+  ])
+  assert.deepEqual(skuPricePoints(s), [{ at: Date.parse("2026-02-01T00:00:00Z"), per1k: 0.6 }])
+  const tiered: YandexSku = {
+    id: "t", name: "t", pricingUnit: "token",
+    pricingVersions: [{ effectiveTime: "2026-01-01T00:00:00Z", pricingExpressions: [{ rates: [
+      { startPricingQuantity: "1000000", unitPrice: "0.0001", currency: "RUB" },
+      { startPricingQuantity: "0", unitPrice: "0.0002", currency: "RUB" },
+    ] }] }],
+  }
+  assert.equal(skuPricePoints(tiered)[0]?.per1k, 0.2)
+  assert.throws(() => skuPricePoints(sku("r", "r", [{ at: "2026-01-01T00:00:00Z", price: "1" }], "request")), YandexBillingError)
+})
+
+test("billing: price plan adds a row only when the price changes, plus announced future prices", () => {
+  const now = new Date("2026-11-11T12:00:00Z")
+  const skusById = new Map([
+    ["in00000000000000000a", sku("in00000000000000000a", "in", [{ at: "2026-03-02T21:00:00Z", price: "0.8" }])],
+    ["out0000000000000000a", sku("out0000000000000000a", "out", [
+      { at: "2026-03-02T21:00:00Z", price: "0.8" }, { at: "2026-12-01T00:00:00Z", price: "1.0" },
+    ])],
+  ])
+  const link = { inputSkuId: "in00000000000000000a", outputSkuId: "out0000000000000000a" }
+  const first = planModelPriceRows({ link, skusById, existing: [], now })
+  assert.deepEqual(first.map((r) => [r.validFrom.toISOString(), r.inputRubPer1k, r.outputRubPer1k]), [
+    [now.toISOString(), 0.8, 0.8],
+    ["2026-12-01T00:00:00.000Z", 0.8, 1],
+  ])
+  // Second run: nothing changed → nothing to add.
+  assert.deepEqual(planModelPriceRows({ link, skusById, existing: first, now: new Date(now.getTime() + 86_400_000) }), [])
+  // A manual price that differs → the Yandex price is added from now.
+  const manual = [{ validFrom: new Date("2026-10-01T00:00:00Z"), inputRubPer1k: 0.5, outputRubPer1k: 0.5 }]
+  const fix = planModelPriceRows({ link, skusById, existing: manual, now })
+  assert.equal(fix.length, 2)
+  assert.equal(fix[0].inputRubPer1k, 0.8)
+  assert.throws(() => planModelPriceRows({ link: { ...link, inputSkuId: "missing0000000000000" }, skusById, existing: [], now }), YandexBillingError)
+})
+
+test("billing: text generation SKUs group into model + mode with input and output", () => {
+  const groups = groupTextGenerationSkus([
+    sku("i1", "Text generation, YandexGPT Pro 5.1 model, input tokens, synchronous mode", []),
+    sku("o1", "Text generation, YandexGPT Pro 5.1 model, output tokens, synchronous mode", []),
+    sku("c1", "Text generation, YandexGPT Pro 5.1 model, cached tokens, synchronous mode", []),
+    sku("i2", "Text generation, Qwen3-14B model, input tokens, batch mode", []),
+    sku("x", "Speech synthesis, standard voices", []),
+  ])
+  assert.deepEqual(groups, [{ key: "YandexGPT Pro 5.1|synchronous", modelName: "YandexGPT Pro 5.1", mode: "synchronous", inputSkuId: "i1", outputSkuId: "o1" }])
+  for (const link of Object.values(DEFAULT_SKU_MAP)) {
+    assert.match(link.inputSkuId, SKU_ID)
+    assert.match(link.outputSkuId, SKU_ID)
+  }
+})
+
+test("billing: client exchanges a JWT once, sends the IAM token and pages through SKUs", async () => {
+  const { json } = testSaKey()
+  const calls: { url: string; auth: string | null }[] = []
+  const fakeFetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url)
+    calls.push({ url: u, auth: new Headers(init?.headers).get("authorization") })
+    if (u.startsWith("https://iam.api.cloud.yandex.net")) {
+      return new Response(JSON.stringify({ iamToken: "t0k3n", expiresAt: new Date(Date.now() + 43_200_000).toISOString() }))
+    }
+    const page = new URL(u).searchParams.get("pageToken")
+    return new Response(JSON.stringify(page
+      ? { skus: [{ id: "s2", name: "b" }] }
+      : { skus: [{ id: "s1", name: "a" }], nextPageToken: "p2" }))
+  }) as typeof fetch
+  const client = createYandexBillingClient(
+    { key: parseServiceAccountKey(json), billingAccountId: "dn2abcdefghij0123456" }, fakeFetch)
+  const skus = await client.listSkus()
+  assert.deepEqual(skus.map((s) => s.id), ["s1", "s2"])
+  await client.listSkus()
+  assert.equal(calls.filter((c) => c.url.includes("iam.api")).length, 1)
+  const billing = calls.filter((c) => c.url.includes("billing.api"))
+  assert.ok(billing.every((c) => c.auth === "Bearer t0k3n"))
+  const q = new URL(billing[0].url).searchParams
+  assert.equal(q.get("currency"), "RUB")
+  assert.equal(q.get("billingAccountId"), "dn2abcdefghij0123456")
+  assert.equal(q.get("filter"), `serviceId="${YANDEX_AI_STUDIO_SERVICE_ID}"`)
+
+  const denied = createYandexBillingClient({ key: parseServiceAccountKey(json), billingAccountId: "dn2abcdefghij0123456" },
+    (async () => new Response(JSON.stringify({ message: "invalid authorization metadata" }), { status: 401 })) as typeof fetch)
+  await assert.rejects(denied.listSkus(), /IAM token exchange failed: HTTP 401: invalid authorization metadata/)
 })

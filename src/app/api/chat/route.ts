@@ -59,7 +59,7 @@ function toSourceHit(row: SourceItemRow) {
 // sub-call (see src/server/web-search.ts for why Google's `google_search`
 // can't just be passed through to the chat model) so it is provider-agnostic
 // and always registered — no session or org needed to read the public web.
-const webTools = {
+const buildWebTools = (organizationId: string | null) => ({
   searchWeb: tool({
     description:
       "Search the public internet and return grounded findings plus the source URLs consulted. Use it for anything the user's own records can't answer — what a company does, who its people are, market/news context, public contact details. Always use it before stating a fact about a named real-world company, person, product or event.",
@@ -71,9 +71,9 @@ const webTools = {
           "What to look up, as a self-contained search query (include the company/person name — this tool sees no chat history).",
         ),
     }),
-    execute: async ({ query }) => searchWeb(query),
+    execute: async ({ query }) => searchWeb(query, organizationId),
   }),
-} as const
+})
 
 function buildSourceTools(organizationId: string | null) {
   if (!organizationId) return undefined
@@ -298,8 +298,11 @@ export async function POST(req: Request) {
       model?: string
     } = await req.json()
 
+    const session = await getServerSession()
+    const sourceOrgId = session?.session.activeOrganizationId ?? null
     const ai = getAiRuntime()
-    const aiRoute = ai.resolve({ task: "chat", modelId: modelKey })
+    // organizationId → metered in llm_usage + the org's daily cost cap.
+    const aiRoute = ai.resolve({ task: "chat", modelId: modelKey, organizationId: sourceOrgId })
     const webEnabled = ai.isFeatureAllowed("webSearch") && ai.listModels("webSearch").length > 0
     assertChatContentAllowed(messages, aiRoute.adapter)
 
@@ -316,14 +319,12 @@ export async function POST(req: Request) {
     // organization — items are tenant-scoped, so without an active org
     // there's nothing to search. Anonymous or org-less callers only get
     // the externally permitted tools (which may be none).
-    const session = await getServerSession()
-    const sourceOrgId = session?.session.activeOrganizationId ?? null
     const sourceTools = buildSourceTools(sourceOrgId)
 
     // Web search needs neither a session nor an org, but is registered only
     // when the deployment policy and its model route allow it.
     const tools = {
-      ...(webEnabled ? webTools : {}),
+      ...(webEnabled ? buildWebTools(sourceOrgId) : {}),
       ...(sourceTools ?? {}),
     }
     const hasTools = Object.keys(tools).length > 0

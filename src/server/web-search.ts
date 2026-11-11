@@ -6,7 +6,7 @@ import { generateText, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 
 import { researchYandex } from "@/server/ai/search"
-import { getAiRuntime } from "@/server/ai"
+import { getAiRuntime, withAiUsageContext } from "@/server/ai"
 
 // ── Web search as an explicit tool, not a passthrough ────────────────
 //
@@ -59,7 +59,13 @@ const RESEARCH_SYSTEM =
  * actually backed the findings; the chat prompt requires the model to say so
  * when they didn't.
  */
-export async function searchWeb(query: string): Promise<WebSearchResult> {
+export async function searchWeb(query: string, organizationId?: string | null): Promise<WebSearchResult> {
+  // Tools run while the chat stream is consumed: pass the org explicitly so
+  // the LLM calls are metered against it (src/server/ai/usage.ts).
+  return withAiUsageContext({ organizationId: organizationId ?? null }, () => runWebSearch(query))
+}
+
+async function runWebSearch(query: string): Promise<WebSearchResult> {
   const q = query.trim()
   if (!q) {
     return { query, findings: "Empty query.", sources: [], grounded: false }

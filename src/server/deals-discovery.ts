@@ -461,7 +461,7 @@ export async function generateDeals(
     )
     .join("\n- ")
 
-  const aiRoute = getAiRuntime().resolve({ task: "deals", modelId: input.modelKey })
+  const aiRoute = getAiRuntime().resolve({ task: "deals", modelId: input.modelKey, organizationId: activeOrgId })
 
   const result: GenerateDealsResult = {
     scanned: 0,

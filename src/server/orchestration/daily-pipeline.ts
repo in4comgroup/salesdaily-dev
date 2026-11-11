@@ -118,6 +118,10 @@ export async function runDailyPipeline(
       const r = await parseSourceItem(id)
       if (r.parentStatus === "complete") parseComplete++
       else if (r.parentStatus === "skipped") parseSkipped++
+      else if (r.parentStatus === "pending") {
+        // Daily LLM cost cap of the item's org: the item stays queued.
+        pushError(errors, { phase: "parse", sourceItemId: id, message: r.parentParseError ?? "deferred" })
+      }
       else if (r.parentStatus === "failed") {
         parseFailed++
         // Snapshot parse_error now — a manual Re-parse on the same row

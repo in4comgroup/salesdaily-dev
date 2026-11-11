@@ -517,7 +517,7 @@ export async function generateCards(
     return { historyMarkdown: lines.join("\n"), priorCount: kept.length }
   }
 
-  const aiRoute = getAiRuntime().resolve({ task: "cards", modelId: input.modelKey })
+  const aiRoute = getAiRuntime().resolve({ task: "cards", modelId: input.modelKey, organizationId: activeOrgId })
 
   const result: GenerateCardsResult = {
     scanned: 0,

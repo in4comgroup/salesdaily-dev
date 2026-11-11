@@ -38,7 +38,7 @@ import { generateText, Output, stepCountIs } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
 import { getServerSession } from "@/lib/get-session"
-import { getAiRuntime } from "@/server/ai"
+import { getAiRuntime, withAiUsageContext } from "@/server/ai"
 import { randomUUID } from "crypto"
 import { request as httpsRequest } from "node:https"
 import { request as httpRequest } from "node:http"
@@ -1072,8 +1072,13 @@ export async function lookupClientOnWeb(
   const target = await assertClientInOrg(clientId, activeOrgId)
 
   const ai = getAiRuntime()
-  const researchModel = ai.hasService("search") ? ai.resolve({ task: "companyResearch" }).model : ai.resolveGoogleSearch("companyResearch")
-  const extractionModel = ai.resolve({ task: "companyExtraction" }).model
+  // resolveGoogleSearch has no org argument: attribute via the usage context.
+  const { researchModel, extractionModel } = withAiUsageContext({ organizationId: activeOrgId }, () => ({
+    researchModel: ai.hasService("search")
+      ? ai.resolve({ task: "companyResearch" }).model
+      : ai.resolveGoogleSearch("companyResearch"),
+    extractionModel: ai.resolve({ task: "companyExtraction" }).model,
+  }))
 
   // Pull active contacts for extra disambiguation context (their names +
   // emails — never the suspended ones, those are archived).
