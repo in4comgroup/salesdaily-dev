@@ -2245,7 +2245,7 @@ export const llmUsage = pgTable(
       onDelete: "set null",
     }),
     task: text("task").notNull(),
-    // Model id from AI_CONFIG_PATH (`yandex-text`) + normalised upstream name.
+    // Model id from the AI configuration (`yandex-text`) + normalised upstream name.
     modelId: text("model_id").notNull(),
     model: text("model").notNull(),
     operation: text("operation").notNull(), // generate | stream

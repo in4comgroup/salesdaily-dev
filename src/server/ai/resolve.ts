@@ -2,7 +2,7 @@ import "server-only"
 
 import { type LanguageModel } from "ai"
 import {
-  AiConfigurationError, AI_SERVICES, loadAiConfig, parseAiConfig,
+  AiConfigurationError, AI_SERVICES, DISABLED_AI_CONFIG, parseAiConfig,
   type AiCapability, type AiEnvironment, type AiFeature, type AiTask,
 } from "./config"
 import { authorizeAiModel, assertAiFeatureAllowed } from "./policy"
@@ -10,7 +10,7 @@ import { listAvailableAiModels, requiredTaskCapabilities } from "./registry"
 import { createYandexAdapter } from "./adapters/yandex"
 import { createYandexService, type ServiceName, type YandexService } from "./services"
 import {
-  LEGACY_MODEL_URI_ENV, YANDEX_ENV, YANDEX_SERVICE_KEY_ENV,
+  YANDEX_ENV, YANDEX_SERVICE_KEY_ENV,
   readYandexApiKey, readYandexFolderId, resolveYandexApiUrl,
 } from "./yandex-connection"
 import { AiPolicyError } from "./policy"
@@ -49,8 +49,7 @@ export function createAiRuntime(
 
   const modelUris = new Map<string, string>()
   for (const [id, model] of enabledModels) {
-    const legacyEnv = LEGACY_MODEL_URI_ENV[id]
-    const uri = model.uri ?? (legacyEnv ? environment[legacyEnv]?.trim() : undefined)
+    const uri = model.uri
     if (!uri) throw new AiConfigurationError(`Missing model URI for AI model: ${id}`)
     // Validates the URI (Yandex format, configured folder) before any call.
     adapter!(uri, model.capabilities.includes("image"))
@@ -119,7 +118,8 @@ export type AiRuntime = ReturnType<typeof createAiRuntime>
 // more than one bundle (instrumentation + routes), and all of them must see
 // the same configuration. In the app, src/server/ai-config-store.ts sets it at
 // startup and replaces it when the active database version changes. Without
-// the store (CLI tools, tests) it is built once from the AI_CONFIG_PATH file.
+// the store (CLI tools, tests) AI is off; they build their own runtime with
+// createAiRuntime().
 const RUNTIME_KEY = Symbol.for("crm.ai.runtime")
 type RuntimeHolder = { runtime?: AiRuntime }
 function holder(): RuntimeHolder {
@@ -133,5 +133,5 @@ export function setAiRuntime(next: AiRuntime) {
 
 export function getAiRuntime(): AiRuntime {
   const h = holder()
-  return h.runtime ??= createAiRuntime(loadAiConfig())
+  return h.runtime ??= createAiRuntime(DISABLED_AI_CONFIG, {})
 }

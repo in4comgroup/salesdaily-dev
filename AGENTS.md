@@ -9,6 +9,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**System documentation** (technical description of features — sign-in, AI subsystem, AI routing config, usage/billing, operations; Russian): `docs/docs/` (start at `docs/docs/README.md`). Update it in the same change as the feature.
+
 **Subsystem details live in nested files:**
 - `src/app/CLAUDE.md` — feature flows: **global search** (`/api/search`, reachable from every page's header) and the **global AI chat panel** (also reachable from every page, mounted once at the layout level), **analytics (sales reporting over orders — `/analytics`)**, invitation flow, sources (Nylas/**IMAP**/Chat/Drive/Files Drop Off/**Telegram bot** — per-org webhook push; email parser also folds **calendar (.ics) invites** into the parent item; **own-org attribution** of every parsed item; admin **source teardown/reset**), **companies** (`/clients` — 5 relationship tabs, scroll-loaded feed, + **batch web enrichment**, owner-managed **discovery blocklist**) and a **standalone contacts directory** (`/contacts`), tasks (Kanban + Timeline), **deals (sales funnel + LLM discovery)**, **products (catalog) & orders (manual builder + guest order-confirmation links + LLM-assisted "order from request" assembly)**, org member management.
 - `src/lib/CLAUDE.md` — logic/infra: email delivery, Google infrastructure, AI chat, json-render catalog/registry.
@@ -98,7 +100,7 @@ Before changing database-backed code or `src/db/schema.ts`, read
 - **Tailwind CSS v4** with shadcn/ui (New York style)
 - **Resend** / **Nylas** — transactional email (dispatcher in `src/lib/email.ts`, provider picked by `EMAIL_PROVIDER`)
 - **React Hook Form + Zod** — form validation
-- **Vercel AI SDK v6** (`ai`) with **`@ai-sdk/openai-compatible`** → **Yandex AI Studio API only** (`src/server/ai/`). Vercel AI Gateway, Google Search and `@ai-sdk/google` were removed (2026-11-11). Address = `YANDEX_AI_API_URL` (default `https://ai.api.cloud.yandex.net`), keys `YANDEX_AI_API_KEY` + `YANDEX_AI_FOLDER_ID`. Routing = the active row of `ai_config_version` (DB), checked every 30 s; fallback = JSON by `AI_CONFIG_PATH` until stage 4 of `docs/ai/config-in-db-spec.md`; else AI off (the app still runs).
+- **Vercel AI SDK v6** (`ai`) with **`@ai-sdk/openai-compatible`** → **Yandex AI Studio API only** (`src/server/ai/`). Vercel AI Gateway, Google Search and `@ai-sdk/google` were removed (2026-11-11). Address = `YANDEX_AI_API_URL` (default `https://ai.api.cloud.yandex.net`), keys `YANDEX_AI_API_KEY` + `YANDEX_AI_FOLDER_ID`. Routing (incl. model URIs) = the active row of `ai_config_version` (DB), checked every 30 s, edited in Settings → «Модели» → «Маршруты ИИ»; no row / DB down / invalid version → AI off (the app still runs). No JSON config files, no `AI_CONFIG_PATH`, no ConfigMap.
 - **ai-elements**, **streamdown** (code via Shiki, math, CJK, mermaid plugins), **json-render** (`@json-render/{core,react,shadcn}`) — AI UI
 - **Recharts** (via shadcn/ui Charts), **@tanstack/react-table** — data viz
 - **Nylas SDK v8** — email reading/sending. Reading is **per-source**: `src/lib/nylas.ts` exports `getNylasClient(creds)` alongside the platform client, so a source whose `credentials_ref` carries `apiKey`/`apiUri` is read through the ORG's own Nylas application (the default export stays for platform transactional mail)

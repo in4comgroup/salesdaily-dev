@@ -1,5 +1,5 @@
 // Source-parser input limits and deterministic preprocessing.
-// Model routing lives in the server AI configuration (AI_CONFIG_PATH).
+// Model routing lives in the AI configuration in the database (ai_config_version).
 
 export const PARSER_CONFIG = {
   pdf: {

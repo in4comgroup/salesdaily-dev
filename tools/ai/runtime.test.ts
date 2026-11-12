@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { buildStage3Profile } from "./profile"
+import { TEXT_URI, VISION_URI, withFunctions, yandexFixture } from "./fixtures"
 import { recognizeSpeech, parseSpeechResult } from "../../src/server/ai/speech"
 import { recognizePdf, parseOcrResult } from "../../src/server/ai/ocr"
 import { encodeMonoWav } from "../../src/lib/pcm-wav"
@@ -18,9 +18,9 @@ import {
 import test from "node:test"
 import { generateText, streamText, Output, tool, stepCountIs } from "ai"
 import { z } from "zod"
-import { AiConfigurationError, loadAiConfig, parseAiConfig } from "../../src/server/ai/config"
+import { AiConfigurationError, DISABLED_AI_CONFIG, parseAiConfig } from "../../src/server/ai/config"
 import { AiPolicyError, assertChatContentAllowed } from "../../src/server/ai/policy"
-import { createAiRuntime } from "../../src/server/ai/resolve"
+import { createAiRuntime, getAiRuntime } from "../../src/server/ai/resolve"
 import { createAiConfigStore, type AiConfigSource } from "../../src/server/ai/config-store"
 import { prepareSeedDocument } from "./seed"
 import { AiProviderError, AiProbeError, AiMediaError, formatAiCheckError } from "../../src/server/ai/errors"
@@ -31,13 +31,12 @@ import {
 } from "../../src/server/ai/usage"
 
 function blocked() {
-  return JSON.parse(readFileSync("config/ai/blocked.json", "utf8"))
+  return structuredClone(DISABLED_AI_CONFIG)
 }
 
 const yandexEnv = {
   YANDEX_AI_API_KEY: "synthetic-yandex-key",
   YANDEX_AI_FOLDER_ID: "test-folder",
-  YANDEX_AI_TEXT_MODEL_URI: "gpt://test-folder/yandexgpt-5.1",
 }
 
 test("text-only chat rejects file parts in new messages and history", () => {
@@ -47,11 +46,11 @@ test("text-only chat rejects file parts in new messages and history", () => {
   ]), AiPolicyError)
 })
 function yandex() {
-  return JSON.parse(readFileSync("config/ai/yandex.json", "utf8"))
+  return yandexFixture()
 }
 function completion(content: string, toolCalls?: unknown[]) {
   return {
-    id: "synthetic", created: 0, model: yandexEnv.YANDEX_AI_TEXT_MODEL_URI,
+    id: "synthetic", created: 0, model: TEXT_URI,
     choices: [{ index: 0, message: { role: "assistant", content, ...(toolCalls ? { tool_calls: toolCalls } : {}) },
       finish_reason: toolCalls ? "tool_calls" : "stop" }],
     usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
@@ -70,9 +69,10 @@ function selectable() {
   return config
 }
 
-test("missing configuration fails without any default route", () => {
-  assert.throws(() => loadAiConfig(yandexEnv), AiConfigurationError)
-  assert.throws(() => loadAiConfig({ AI_CONFIG_PATH: "/not-an-ai-config.json" }), AiConfigurationError)
+test("without a loaded configuration AI is off (no default route)", () => {
+  const runtime = getAiRuntime()
+  assert.deepEqual(runtime.listModels("chat"), [])
+  assert.throws(() => runtime.resolve({ task: "chat" }), AiPolicyError)
 })
 
 test("strict schema rejects old format, provider sections, foreign URIs and fallbacks", () => {
@@ -210,10 +210,17 @@ test("Yandex config requires its own credentials and same-folder model URI", () 
   for (const environment of [
     {}, { ...yandexEnv, YANDEX_AI_API_KEY: "" },
     { ...yandexEnv, YANDEX_AI_FOLDER_ID: "" },
-    { ...yandexEnv, YANDEX_AI_TEXT_MODEL_URI: "" },
-    { ...yandexEnv, YANDEX_AI_TEXT_MODEL_URI: "gpt://other-folder/yandexgpt" },
-    { ...yandexEnv, YANDEX_AI_TEXT_MODEL_URI: "https://example.com/model" },
   ]) assert.throws(() => createAiRuntime(yandex(), environment), AiConfigurationError)
+  for (const uri of [undefined, "gpt://other-folder/yandexgpt", "https://example.com/model"]) {
+    const config = yandex()
+    if (uri === undefined) delete config.models["yandex-text"].uri
+    else config.models["yandex-text"].uri = uri
+    assert.throws(() => createAiRuntime(config, yandexEnv), AiConfigurationError)
+  }
+  // Model URIs never come from env any more.
+  const config = yandex()
+  delete config.models["yandex-text"].uri
+  assert.throws(() => createAiRuntime(config, { ...yandexEnv, YANDEX_AI_TEXT_MODEL_URI: TEXT_URI }), AiConfigurationError)
 })
 
 test("base profile keeps media and search off and refuses unknown model selections", () => {
@@ -253,7 +260,7 @@ test("Yandex text uses only direct endpoint, explicit auth, folder and no-loggin
     assert.equal(headers.get("x-data-logging-enabled"), "false")
     assert.equal(init?.redirect, "error")
     const body = JSON.parse(String(init?.body))
-    assert.equal(body.model, yandexEnv.YANDEX_AI_TEXT_MODEL_URI)
+    assert.equal(body.model, TEXT_URI)
     assert.equal(body.messages[0].content, "synthetic")
     return Response.json(completion("OK"))
   }
@@ -429,7 +436,7 @@ function mediaProfile() {
   for (const task of ["parseImage", "parsePdf", "describeImage"]) config.tasks[task].enabled = true
   return config
 }
-const mediaEnv = { ...yandexEnv, YANDEX_AI_VISION_MODEL_URI: "gpt://test-folder/vision-test", YANDEX_OCR_API_KEY: "synthetic-ocr-key" }
+const mediaEnv = { ...yandexEnv, YANDEX_OCR_API_KEY: "synthetic-ocr-key" }
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=", "base64")
 
 test("media profile requires an explicit vision route and preserves text-only profile defaults", () => {
@@ -455,12 +462,12 @@ test("image pipeline sends inline pixels only to vision, then text only to struc
     assert.equal(String(url), "https://ai.api.cloud.yandex.net/v1/chat/completions")
     const body = JSON.parse(String(init?.body))
     bodies.push(body)
-    if (body.model === mediaEnv.YANDEX_AI_VISION_MODEL_URI) {
+    if (body.model === VISION_URI) {
       assert.equal(body.response_format, undefined)
       assert.match(JSON.stringify(body.messages), /data:image\/png;base64,/)
       return Response.json(completion("Synthetic readable image content"))
     }
-    assert.equal(body.model, mediaEnv.YANDEX_AI_TEXT_MODEL_URI)
+    assert.equal(body.model, TEXT_URI)
     assert.equal(JSON.stringify(body.messages).includes("data:image/"), false)
     return Response.json(completion('{"ok":true}'))
   })
@@ -471,7 +478,7 @@ test("image pipeline sends inline pixels only to vision, then text only to struc
     output: Output.object({ schema: z.object({ ok: z.boolean() }) }),
   })
   assert.equal(result.output.ok, true)
-  assert.equal(prepared.preprocessingModel, mediaEnv.YANDEX_AI_VISION_MODEL_URI)
+  assert.equal(prepared.preprocessingModel, VISION_URI)
   assert.equal(bodies.length, 2)
 })
 
@@ -507,7 +514,7 @@ test("media errors provide actionable safe CLI diagnostics", () => {
 })
 
 const serviceEnv = { ...mediaEnv, YANDEX_SPEECH_API_KEY: "synthetic-speech-key", YANDEX_SEARCH_API_KEY: "synthetic-search-key" }
-function fullProfile() { return buildStage3Profile(yandex(), ["images", "pdf", "audio", "search", "voice"]) }
+function fullProfile() { return withFunctions(yandex(), ["images", "pdf", "audio", "search", "voice"]) }
 const speechEvents = [
   { result: { final: { alternatives: [{ text: "raw", words: [{ startTimeMs: "100", endTimeMs: "900" }] }], channelTag: "0" }, audioCursors: { finalIndex: "0", receivedDataMs: "2000" } } },
   { result: { finalRefinement: { finalIndex: "0", normalizedText: { alternatives: [{ text: "Тестовый заказ 123", startTimeMs: "100", endTimeMs: "900" }], channelTag: "0" } } } },
@@ -515,16 +522,16 @@ const speechEvents = [
 ]
 
 test("single Yandex profile explicitly enables selected dependencies and preserves safe defaults", () => {
-  const voiceOnly = buildStage3Profile(yandex(), ["voice"])
+  const voiceOnly = withFunctions(yandex(), ["voice"])
   const runtime = createAiRuntime(voiceOnly, { ...yandexEnv, YANDEX_SPEECH_API_KEY: "synthetic" })
   assert.equal(runtime.hasService("speech"), true)
   assert.equal(runtime.hasService("search"), false)
   assert.equal(runtime.isFeatureAllowed("serverSpeechRecognition"), true)
   assert.throws(() => runtime.resolve({ task: "parseAudio" }), AiPolicyError)
-  const off = buildStage3Profile(fullProfile(), [])
+  const off = withFunctions(fullProfile(), [])
   assert.equal(off.models["yandex-vision"].enabled, false)
   assert.doesNotThrow(() => createAiRuntime(off, yandexEnv))
-  assert.throws(() => buildStage3Profile(yandex(), ["typo"]), AiConfigurationError)
+  assert.throws(() => withFunctions(yandex(), ["typo"]), AiConfigurationError)
   const config = fullProfile()
   config.services.speech = false
   assert.throws(() => createAiRuntime(config, serviceEnv), AiConfigurationError)
@@ -652,7 +659,7 @@ const ocrPages = [
 ]
 
 test("PDF goes directly to Yandex OCR without vision, temporary files or native tools", async () => {
-  const profile = buildStage3Profile(yandex(), ["pdf"])
+  const profile = withFunctions(yandex(), ["pdf"])
   assert.equal(profile.models["yandex-vision"].enabled, false)
   const calls: string[] = []
   const runtime = createAiRuntime(profile, { ...yandexEnv, YANDEX_OCR_API_KEY: "synthetic-ocr" }, async (input, init) => {
@@ -745,7 +752,7 @@ test("unsupported audio and video never trigger hidden conversion or external ca
     await assert.rejects(transcribeMedia(bytes, "audio", runtime), AiPolicyError)
   }
   await assert.rejects(transcribeMedia(Buffer.from("video"), "video", runtime), AiPolicyError)
-  assert.throws(() => buildStage3Profile(yandex(), ["video"]), AiConfigurationError)
+  assert.throws(() => withFunctions(yandex(), ["video"]), AiConfigurationError)
   assert.equal(requests, 0)
 })
 
@@ -1041,9 +1048,9 @@ test("billing: client exchanges a JWT once, sends the IAM token and pages throug
 })
 
 
-// ── AI configuration store (docs/ai/config-in-db-spec.md, stage 2) ─────────
+// ── AI configuration store (docs/ai/config-in-db-spec.md) ──────────────────
 
-function storeHarness(options: { file?: unknown | null; rows?: { id: number; config: unknown } | null; failRead?: boolean }) {
+function storeHarness(options: { rows?: { id: number; config: unknown } | null; failRead?: boolean }) {
   let row = options.rows ?? null
   let failRead = options.failRead ?? false
   let reads = 0
@@ -1052,12 +1059,7 @@ function storeHarness(options: { file?: unknown | null; rows?: { id: number; con
     async readActive() { reads++; if (failRead) throw new Error("db down"); return row },
   }
   let current: ReturnType<typeof createAiRuntime> | undefined
-  const store = createAiConfigStore({
-    source, env: yandexEnv,
-    readFile: () => (options.file === undefined ? null : options.file),
-    apply: (runtime) => { current = runtime },
-    log: () => {},
-  })
+  const store = createAiConfigStore({ source, env: yandexEnv, apply: (runtime) => { current = runtime }, log: () => {} })
   return {
     store,
     chatModels: () => current!.listModels("chat").map((m) => m.id),
@@ -1067,48 +1069,42 @@ function storeHarness(options: { file?: unknown | null; rows?: { id: number; con
   }
 }
 
-test("config store: active database version wins over the file", async () => {
-  const h = storeHarness({ file: yandex(), rows: { id: 7, config: selectable() } })
+test("config store: the active database version is used", async () => {
+  const h = storeHarness({ rows: { id: 7, config: selectable() } })
   await h.store.load()
   assert.deepEqual(h.chatModels(), ["yandex-text", "yandex-lite"])
   assert.equal(h.store.state().source, "database")
   assert.equal(h.store.state().versionId, 7)
 })
 
-test("config store: no active version or database down at start → file, else everything off", async () => {
-  const noRow = storeHarness({ file: yandex(), rows: null })
+test("config store: no active version, database down or invalid version at start → AI off, CRM runs", async () => {
+  const noRow = storeHarness({ rows: null })
   await noRow.store.load()
-  assert.equal(noRow.store.state().source, "file")
-  assert.deepEqual(noRow.chatModels(), ["yandex-text"])
+  assert.equal(noRow.store.state().source, "disabled")
+  assert.deepEqual(noRow.chatModels(), [])
+  assert.match(noRow.store.state().lastError ?? "", /no active/)
 
-  const down = storeHarness({ file: yandex(), failRead: true })
+  const down = storeHarness({ failRead: true })
   await down.store.load()
-  assert.equal(down.store.state().source, "file")
+  assert.equal(down.store.state().source, "disabled")
   assert.match(down.store.state().lastError ?? "", /database read failed/)
+  // Recovers when the database answers again.
+  down.setFailRead(false)
+  down.setRow({ id: 1, config: yandex() })
+  await down.store.check()
+  assert.equal(down.store.state().source, "database")
 
-  const nothing = storeHarness({ rows: null })
-  await nothing.store.load()
-  assert.equal(nothing.store.state().source, "disabled")
-  assert.deepEqual(nothing.chatModels(), [])
-})
-
-test("config store: invalid version at start turns AI off and never uses the stale file", async () => {
   const broken = selectable()
   broken.models["yandex-lite"].uri = "gpt://other-folder/model"
-  const h = storeHarness({ file: yandex(), rows: { id: 3, config: broken } })
-  await h.store.load()
-  assert.equal(h.store.state().source, "disabled")
-  assert.deepEqual(h.chatModels(), [])
-  assert.match(h.store.state().lastError ?? "", /version 3 is invalid/)
+  const invalid = storeHarness({ rows: { id: 3, config: broken } })
+  await invalid.store.load()
+  assert.equal(invalid.store.state().source, "disabled")
+  assert.match(invalid.store.state().lastError ?? "", /version 3 is invalid/)
 })
 
 test("config store: new version swaps the runtime; broken or unreadable updates keep the last working one", async () => {
-  const h = storeHarness({ file: yandex(), rows: null })
+  const h = storeHarness({ rows: { id: 1, config: yandex() } })
   await h.store.load()
-  assert.equal(h.store.state().source, "file")
-
-  h.setRow({ id: 1, config: yandex() })
-  await h.store.check()
   assert.equal(h.store.state().versionId, 1)
 
   h.setRow({ id: 2, config: selectable() })
@@ -1116,7 +1112,7 @@ test("config store: new version swaps the runtime; broken or unreadable updates 
   assert.deepEqual(h.chatModels(), ["yandex-text", "yandex-lite"])
 
   const broken = selectable()
-  broken.tasks.parsePdf.enabled = true // needs the OCR service
+  broken.models["yandex-lite"].uri = "gpt://other-folder/model"
   h.setRow({ id: 3, config: broken })
   await h.store.check()
   assert.equal(h.store.state().versionId, 2)
@@ -1129,20 +1125,15 @@ test("config store: new version swaps the runtime; broken or unreadable updates 
   await h.store.check()
   assert.equal(h.store.state().versionId, 2)
   assert.match(h.store.state().lastError ?? "", /database check failed/)
-
-  h.setFailRead(false)
-  h.setRow({ id: 2, config: selectable() })
-  await h.store.check()
-  assert.equal(h.store.state().versionId, 2)
 })
 
-test("seed: copies missing model URIs from env, keeps document URIs and checks env without network", () => {
-  const { config, filledUris } = prepareSeedDocument(selectable(), yandexEnv)
-  assert.equal(config.models["yandex-text"].uri, yandexEnv.YANDEX_AI_TEXT_MODEL_URI)
-  assert.equal(config.models["yandex-lite"].uri, "gpt://test-folder/yandexgpt-lite")
-  assert.equal(config.models["yandex-vision"].uri, undefined) // disabled, no env value
-  assert.deepEqual(filledUris, ["yandex-text"])
-  assert.throws(() => prepareSeedDocument(yandex(), { ...yandexEnv, YANDEX_AI_TEXT_MODEL_URI: "" }), AiConfigurationError)
+test("document check (admin save and seed): URIs must be in the document, env keys present", () => {
+  const config = prepareSeedDocument(selectable(), yandexEnv)
+  assert.equal(config.models["yandex-text"].uri, TEXT_URI)
+  const noUri = yandex()
+  delete noUri.models["yandex-text"].uri
+  assert.throws(() => prepareSeedDocument(noUri, yandexEnv), (error: unknown) =>
+    error instanceof AiConfigurationError && /models\.yandex-text\.uri \(Enabled model needs a URI\)/.test(error.message))
   assert.throws(() => prepareSeedDocument(yandex(), { ...yandexEnv, YANDEX_AI_API_KEY: "" }), AiConfigurationError)
   assert.throws(() => prepareSeedDocument({ version: 1 }, yandexEnv), AiConfigurationError)
 })

@@ -15,7 +15,7 @@ import { prepareAiConfigDocument } from "@/server/ai/config-document"
 import { createAiRuntime } from "@/server/ai/resolve"
 import { AiPolicyError } from "@/server/ai/policy"
 import {
-  LEGACY_MODEL_URI_ENV, YANDEX_ENV, YANDEX_SERVICE_KEY_ENV, resolveYandexApiUrl,
+  YANDEX_ENV, YANDEX_SERVICE_KEY_ENV, resolveYandexApiUrl,
 } from "@/server/ai/yandex-connection"
 import type { AiConfigStoreState } from "@/server/ai/config-store"
 
@@ -42,7 +42,7 @@ export type AiRoutingState = {
   activeVersionId: number | null
   // Editor start: the active database version, else the running configuration.
   document: AiConfig
-  documentSource: "database" | "file" | "disabled"
+  documentSource: "database" | "disabled"
   versions: AiRoutingVersion[]
   catalog: { tasks: string[]; capabilities: string[]; features: string[]; services: string[] }
   // Which env values this server has — names and presence only, no secrets.
@@ -50,7 +50,6 @@ export type AiRoutingState = {
     apiUrl: string | null
     folderId: string | null
     keys: { name: string; present: boolean }[]
-    legacyModelUris: { modelId: string; name: string; present: boolean }[]
   }
 }
 
@@ -68,8 +67,6 @@ function envInfo(): AiRoutingState["env"] {
     folderId: process.env[YANDEX_ENV.folderId]?.trim() || null,
     keys: [YANDEX_ENV.apiKey, YANDEX_ENV.folderId, ...Object.values(YANDEX_SERVICE_KEY_ENV)]
       .map((name) => ({ name, present: has(name) })),
-    legacyModelUris: Object.entries(LEGACY_MODEL_URI_ENV)
-      .map(([modelId, name]) => ({ modelId, name, present: has(name) })),
   }
 }
 
@@ -99,8 +96,9 @@ export async function getAiRoutingState(): Promise<AiRoutingState> {
     document = active.config as AiConfig
     documentSource = "database"
   } else {
+    // No version yet (or the running one is unknown): start from what runs.
     document = getAiRuntime().document()
-    documentSource = running?.source === "file" ? "file" : "disabled"
+    documentSource = "disabled"
   }
 
   return {
@@ -146,7 +144,7 @@ export async function saveAiRoutingVersion(input: { config: unknown; comment: un
     throw new AdminLlmError("invalid", "comment must be a string")
   }
   const comment = (typeof input.comment === "string" ? input.comment.trim() : "").slice(0, COMMENT_MAX) || null
-  const { config } = check(() => prepareAiConfigDocument(input.config, process.env))
+  const config = check(() => prepareAiConfigDocument(input.config, process.env))
 
   const id = await db.transaction(async (tx) => {
     const [current] = await tx.select().from(aiConfigVersion)

@@ -1,6 +1,7 @@
 # Next.js standalone server (image built by .github/workflows/docker-image.yml).
 #
-# Runtime credentials come from `crm-env`; AI routing JSON from crm-ai-config.
+# Runtime credentials come from `crm-env`. AI routing is stored in the database
+# (table ai_config_version, Settings → «Модели» → «Маршруты ИИ»).
 # NEXT_PUBLIC_* are baked in at image build time and are NOT read from here.
 apiVersion: apps/v1
 kind: Deployment
@@ -50,13 +51,7 @@ spec:
           envFrom:
             - secretRef:
                 name: crm-env
-          volumeMounts:
-            - name: ai-config
-              mountPath: /etc/crm-ai
-              readOnly: true
           env:
-            - name: AI_CONFIG_PATH
-              value: /etc/crm-ai/ai-config.json
             # replicas × DATABASE_POOL_MAX must stay under the managed PG
             # connection limit.
             - name: DATABASE_POOL_MAX
@@ -89,7 +84,3 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-      volumes:
-        - name: ai-config
-          configMap:
-            name: crm-ai-config

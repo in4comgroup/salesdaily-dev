@@ -7,15 +7,12 @@ import { createAiRuntime, type AiRuntime } from "./resolve"
 // No database import here: the DB access is injected (src/server/ai-config-store.ts),
 // so the rules below are tested with a stub in tools/ai/runtime.test.ts.
 //
-//   1. The active row of `ai_config_version` wins.
-//   2. No active row (the seed script has not run yet) or the database is
-//      unreachable before anything was loaded → the JSON file (AI_CONFIG_PATH,
-//      ConfigMap crm-ai-config) while it still exists.
-//   3. Otherwise → everything off (the rest of the CRM keeps working).
-//
-// An invalid active version (bad document, missing env key, wrong folder)
-// never falls back to the file: AI stays off and the error is visible.
-// A later check that fails keeps the last working configuration.
+//   1. The active row of `ai_config_version` is used.
+//   2. No active row, the database is unreachable before anything was loaded,
+//      or the active version is invalid (bad document, missing env key, wrong
+//      folder) → everything off; the rest of the CRM keeps working and the
+//      error is visible.
+//   3. A later check that fails keeps the last working configuration.
 
 export type AiConfigSource = {
   readActiveId(): Promise<number | null>
@@ -23,7 +20,7 @@ export type AiConfigSource = {
 }
 
 export type AiConfigStoreState = {
-  source: "database" | "file" | "disabled"
+  source: "database" | "disabled"
   versionId: number | null
   lastError: string | null
   checkedAt: string | null
@@ -32,9 +29,6 @@ export type AiConfigStoreState = {
 export function createAiConfigStore(options: {
   source: AiConfigSource
   env: AiEnvironment
-  // Returns the parsed file, null when no file is configured; throws when the
-  // file is unreadable.
-  readFile: () => unknown | null
   apply: (runtime: AiRuntime) => void
   build?: (input: unknown, env: AiEnvironment) => AiRuntime
   log?: (message: string) => void
@@ -61,20 +55,7 @@ export function createAiConfigStore(options: {
     console.error(`[ai-config] ${state.lastError}`)
   }
 
-  const applyFileOrDisabled = (reason: string) => {
-    try {
-      const file = options.readFile()
-      if (file !== null) {
-        activate(build(file, options.env), "file", null)
-        return
-      }
-    } catch (error) {
-      fail(`${reason}; file configuration failed: ${message(error)}`)
-      activate(build(DISABLED_AI_CONFIG, {}), "disabled", null)
-      return
-    }
-    activate(build(DISABLED_AI_CONFIG, {}), "disabled", null)
-  }
+  const disable = () => activate(build(DISABLED_AI_CONFIG, {}), "disabled", null)
 
   async function load(): Promise<void> {
     state.checkedAt = new Date().toISOString()
@@ -83,13 +64,13 @@ export function createAiConfigStore(options: {
       row = await options.source.readActive()
     } catch (error) {
       fail(`database read failed: ${message(error)}`)
-      // Keep what runs; only the very first load falls back.
-      if (!applied) applyFileOrDisabled("database unreachable")
+      // Keep what runs; only the very first load turns AI off.
+      if (!applied) disable()
       return
     }
     if (!row) {
-      if (state.source !== "file" || !applied) applyFileOrDisabled("no active database version")
-      if (state.source === "file") state.lastError = null
+      if (!applied || state.source !== "disabled") disable()
+      fail("no active AI configuration version in the database")
       return
     }
     try {
@@ -101,8 +82,8 @@ export function createAiConfigStore(options: {
       failedVersionId = row.id
       fail(`database version ${row.id} is invalid: ${message(error)}`)
       // A broken new version keeps the last working configuration; a broken
-      // version at startup turns AI off (never the stale file).
-      if (!applied) activate(build(DISABLED_AI_CONFIG, {}), "disabled", null)
+      // version at startup turns AI off.
+      if (!applied) disable()
     }
   }
 
@@ -119,7 +100,7 @@ export function createAiConfigStore(options: {
     state.checkedAt = new Date().toISOString()
     if (id !== null && state.source === "database" && id === state.versionId) return
     if (id !== null && id === failedVersionId) return
-    if (id === null && state.source === "file") return
+    if (id === null && state.source === "disabled") return
     return load()
   }
 
